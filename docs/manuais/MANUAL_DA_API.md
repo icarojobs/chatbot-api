@@ -2,6 +2,8 @@
 
 Base URL local: `http://localhost:8000` · Documentação interativa: `/docs` (Swagger) e `/redoc`.
 
+> Prefere testar pelo Postman? Importe a coleção [`docs/postman/chatbot-api.postman_collection.json`](../postman/chatbot-api.postman_collection.json) e siga o [passo a passo](TESTE_COM_POSTMAN.md).
+
 ## Autenticação
 
 Endpoints que consomem créditos exigem o header `Authorization: Bearer <token>`:
