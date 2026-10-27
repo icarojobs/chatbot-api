@@ -82,11 +82,11 @@ sync_secrets() {
 }
 
 secret_bindings() {
-  local variable bindings=()
+  local variable joined=""
   for variable in "${SECRET_VARIABLES[@]}"; do
-    bindings+=("${variable}=$(secret_name "$variable"):latest")
+    joined+="${variable}=$(secret_name "$variable"):latest,"
   done
-  (IFS=,; echo "${bindings[*]}")
+  echo "${joined%,}"
 }
 
 deploy_service() {
