@@ -1,12 +1,16 @@
 from enum import StrEnum
 from functools import lru_cache
-from typing import Annotated
+from typing import Annotated, Self
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 LIST_SEPARATOR = ","
 MIN_TOKEN_LENGTH = 32
+MISSING_PRODUCTION_PROVIDER = (
+    "API_ENV=production exige OPENAI_BASE_URL, OPENAI_ACCESS_KEY, "
+    "OPENAI_RESPONSE_MODELS e OPENAI_EMBEDDINGS_MODELS."
+)
 
 ModelList = Annotated[tuple[str, ...], NoDecode]
 
@@ -34,12 +38,41 @@ class Settings(BaseSettings):
     openai_response_models: ModelList = ()
     openai_embeddings_models: ModelList = ()
 
-    @field_validator("openai_response_models", "openai_embeddings_models", mode="before")
+    ollama_base_url: str = "http://localhost:11434/v1"
+    ollama_access_key: SecretStr = SecretStr("ollama")
+    ollama_response_models: ModelList = ("qwen3:4b-instruct-2507-q4_K_M",)
+    ollama_embeddings_models: ModelList = ("bge-m3:567m",)
+
+    provider_timeout_seconds: float = Field(default=120.0, gt=0)
+    provider_max_retries: int = Field(default=1, ge=0)
+    llm_max_output_tokens: int = Field(default=1500, gt=0)
+
+    @field_validator(
+        "openai_response_models",
+        "openai_embeddings_models",
+        "ollama_response_models",
+        "ollama_embeddings_models",
+        mode="before",
+    )
     @classmethod
     def split_models(cls, value: object) -> object:
         if not isinstance(value, str):
             return value
         return tuple(item.strip() for item in value.split(LIST_SEPARATOR) if item.strip())
+
+    @model_validator(mode="after")
+    def require_production_provider(self) -> Self:
+        if not self.is_production:
+            return self
+        required = (
+            self.openai_base_url,
+            self.openai_access_key.get_secret_value(),
+            self.openai_response_models,
+            self.openai_embeddings_models,
+        )
+        if not all(required):
+            raise ValueError(MISSING_PRODUCTION_PROVIDER)
+        return self
 
     @property
     def is_production(self) -> bool:
