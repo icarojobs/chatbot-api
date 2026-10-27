@@ -1,2 +1,7 @@
+docs/apostilas/*
+
 # Geralmente, deixo esse arquivo abaixo ignorado, mas para entenderem como preparo o conhecimento especializado da IA por projeto, estarei enviando para vocês analisarem.
 # docs/COMPORTAMENTO_DA_IA.md
+
+# Esse diretório playground sempre tenho como untracked em todos projetos. Aqui coloco dados e scripts testes que realmente não precisam ser rastreados (scripts e dados temporários, conforme vou desenvolvendo o projeto)
+playground/
