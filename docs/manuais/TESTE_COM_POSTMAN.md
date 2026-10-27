@@ -84,7 +84,7 @@ Para fazer outra pergunta, edite o texto em **Body → raw**.
 
 ### Histórico e `top_k`
 
-**Conversa com histórico e top_k**: mostra que só a **última** mensagem do usuário vira a pergunta, que mensagens `system` enviadas pelo cliente são ignoradas (a resposta continua em pt-br) e que `top_k` (máximo 8) muda quantos trechos são recuperados.
+**Conversa com histórico e top_k**: mostra que só a **última** mensagem do usuário vira a pergunta, que mensagens `system` funcionam como instruções do cliente (formato, tom, idioma), sem burlar as regras da API, e que `top_k` (máximo 8) muda quantos trechos são recuperados. Em desenvolvimento, o modelo de 4B nem sempre segue instruções de formato; em produção, segue.
 
 ## 6. Enviar um PDF
 

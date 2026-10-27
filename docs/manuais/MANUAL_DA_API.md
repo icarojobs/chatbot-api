@@ -253,6 +253,31 @@ Responde perguntas **com base nas apostilas**, no mesmo formato da API de Chat C
 
 Campos desconhecidos são ignorados; `tools`, `functions`, `tool_choice`, `function_call`, `logprobs` e `n > 1` retornam `400`.
 
+#### Papéis (`role`) das mensagens
+
+| `role` | Uso nesta API |
+|---|---|
+| `user` | A **última** mensagem `user` é a pergunta: ela é usada na busca nas apostilas e enviada ao modelo. |
+| `system` / `developer` | **Instruções do cliente**: ajustam tom, formato, extensão e idioma da resposta (ex.: "responda em 3 tópicos", "use linguagem simples"). Todas as mensagens desses papéis são juntadas (máx. 4000 caracteres; acima disso, `400 instructions_too_long`) e acrescentadas ao prompt de sistema da API. Elas **não podem** alterar as regras da API: responder só com base nas apostilas, citar as fontes, não inventar, não dar conduta clínica individual. Em caso de conflito, prevalecem as regras da API. |
+| `assistant` / `tool` | Aceitas para compatibilidade com conversas da OpenAI, mas não influenciam a resposta (a API não usa memória de conversa). |
+
+**Idioma:** a resposta sai no idioma da pergunta. Se as instruções do cliente pedirem outro idioma, vale o das instruções.
+
+**Modelos pequenos:** em desenvolvimento, o modelo local de 4B nem sempre segue instruções de formato. Os modelos de produção seguem.
+
+Exemplo com instruções:
+
+```json
+{
+  "messages": [
+    {"role": "system", "content": "Responda em no máximo 3 tópicos curtos, em linguagem simples."},
+    {"role": "user", "content": "O que é matriciamento?"}
+  ]
+}
+```
+
+No Swagger (`/docs`), a lista **Examples** do corpo traz exemplos prontos: pergunta simples, modelo e `top_k`, instruções `system`, fora do escopo e streaming.
+
 A resposta inclui dois campos extras (ignorados por clientes da OpenAI):
 
 - `sources`: trechos usados como contexto (`filename`, `page_start`, `page_end`, `score`, `chunk_id`, `document_id`). As citações `[1]`, `[2]`… no texto seguem essa ordem.
