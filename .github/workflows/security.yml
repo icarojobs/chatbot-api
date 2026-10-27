@@ -1,0 +1,160 @@
+name: Security
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  SEMGREP_IMAGE: semgrep/semgrep:1.182.0@sha256:4a34048c04fef049f71665047f074cffb00cc3d89482f965a5cd151d589237af
+  GITLEAKS_IMAGE: ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+  TRIVY_IMAGE: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+  PIP_AUDIT_VERSION: "2.10.1"
+  CAN_UPLOAD_SARIF: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+
+jobs:
+  codeql:
+    name: CodeQL (SAST)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Detectar código Python
+        id: detect
+        run: echo "has_python=$([[ -n "$(git ls-files '*.py')" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        if: steps.detect.outputs.has_python == 'true'
+        with:
+          languages: python
+          build-mode: none
+          queries: security-extended
+
+      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        if: steps.detect.outputs.has_python == 'true'
+        with:
+          category: codeql
+          output: codeql-results
+          upload: ${{ env.CAN_UPLOAD_SARIF == 'true' && 'always' || 'never' }}
+
+      - name: Gate HIGH/CRITICAL
+        if: steps.detect.outputs.has_python == 'true'
+        run: .github/scripts/sarif_gate.sh codeql-results/python.sarif CodeQL
+
+  semgrep:
+    name: Semgrep (SAST / SQL injection)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Scan
+        run: >-
+          .github/scripts/docker_scan.sh "$SEMGREP_IMAGE" semgrep scan --metrics off
+          --config p/default --config p/python --config p/owasp-top-ten
+          --sarif --output semgrep.sarif
+
+      - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        if: env.CAN_UPLOAD_SARIF == 'true'
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+      - name: Gate HIGH/CRITICAL
+        run: .github/scripts/sarif_gate.sh semgrep.sarif Semgrep
+
+  pip-audit:
+    name: pip-audit (CVE em dependências)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Detectar uv.lock
+        id: detect
+        run: echo "has_lock=$([[ -f uv.lock ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        if: steps.detect.outputs.has_lock == 'true'
+
+      - name: Audit
+        if: steps.detect.outputs.has_lock == 'true'
+        run: |
+          uv export --frozen --no-emit-project --format requirements-txt --output-file requirements-audit.txt
+          uvx "pip-audit@${PIP_AUDIT_VERSION}" --requirement requirements-audit.txt --require-hashes --disable-pip \
+            --progress-spinner off --format json --output pip-audit.json || [[ -s pip-audit.json ]]
+          .github/scripts/pip_audit_gate.sh pip-audit.json
+
+  gitleaks:
+    name: Gitleaks (segredos)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Scan do histórico git
+        run: >-
+          .github/scripts/docker_scan.sh "$GITLEAKS_IMAGE" git /src --redact --no-banner
+          --report-format sarif --report-path /src/gitleaks.sarif
+
+      - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        if: always() && env.CAN_UPLOAD_SARIF == 'true' && hashFiles('gitleaks.sarif') != ''
+        with:
+          sarif_file: gitleaks.sarif
+          category: gitleaks
+
+  trivy:
+    name: Trivy (CVE / misconfig)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Scan
+        run: >-
+          .github/scripts/docker_scan.sh "$TRIVY_IMAGE" fs --cache-dir /tmp/trivy-cache
+          --scanners vuln,misconfig --format sarif --output trivy.sarif .
+
+      - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        if: env.CAN_UPLOAD_SARIF == 'true'
+        with:
+          sarif_file: trivy.sarif
+          category: trivy
+
+      - name: Gate HIGH/CRITICAL
+        run: .github/scripts/sarif_gate.sh trivy.sarif Trivy
