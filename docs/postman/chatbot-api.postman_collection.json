@@ -1,0 +1,962 @@
+{
+  "info": {
+    "name": "Chatbot API (RAG)",
+    "description": "Coleção para testar a Chatbot API (RAG sobre apostilas de saúde mental, contrato compatível com a OpenAI).\n\n1. Na aba **Variables** da coleção, preencha `accessToken` e `adminToken` (valores de `API_ACCESS_TOKEN` e `API_ADMIN_TOKEN` do seu `.env`).\n2. Execute **2. Modelos → Listar modelos** (preenche `model`).\n3. Use as demais pastas.\n\nPasso a passo completo: `docs/manuais/TESTE_COM_POSTMAN.md`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const body = pm.request.body;",
+          "if (body && body.mode === 'raw' && body.raw.includes('{{model}}') && !pm.variables.get('model')) {",
+          "    const payload = JSON.parse(body.raw);",
+          "    delete payload.model;",
+          "    body.update(JSON.stringify(payload, null, 2));",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Saúde",
+      "description": "Rotas públicas (sem token) usadas por load balancers e pelo Cloud Run.",
+      "item": [
+        {
+          "name": "Health (processo vivo)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Responde `{\"status\":\"ok\"}` se o processo está de pé. Não consulta dependências.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ready (dependências prontas)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ready"
+              ]
+            },
+            "description": "Executa os checks de prontidão (banco). Responde `{\"status\":\"ready\"}` ou 503.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('API pronta', () => pm.expect(pm.response.json().status).to.eql('ready'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Modelos",
+      "description": "Modelos de chat configurados (`OPENAI_RESPONSE_MODELS` em produção, Ollama em desenvolvimento). Exige o `accessToken`.",
+      "item": [
+        {
+          "name": "Listar modelos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/models",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "models"
+              ]
+            },
+            "description": "Lista os modelos disponíveis. O primeiro é gravado na variável `model` (se ela estiver vazia) e usado nas requisições de chat."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const models = pm.response.json().data;",
+                  "pm.test('Há ao menos um modelo', () => pm.expect(models.length).to.be.above(0));",
+                  "if (models.length && !pm.collectionVariables.get('model')) {",
+                  "    pm.collectionVariables.set('model', models[0].id);",
+                  "}",
+                  "console.log('Modelos disponíveis:', models.map(m => m.id));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Detalhar modelo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/models/{{model}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "models",
+                "{{model}}"
+              ]
+            },
+            "description": "Detalha o modelo da variável `model`. IDs com `/` (ex.: `azure/gpt-5-mini`) funcionam sem codificação."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Chat (RAG)",
+      "description": "`POST /v1/chat/completions` no formato da OpenAI, com os campos extras `sources` (trechos citados) e `abstained` (sem evidência suficiente na base). Exige o `accessToken`.",
+      "item": [
+        {
+          "name": "Pergunta no escopo (sem streaming)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/chat/completions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "chat",
+                "completions"
+              ]
+            },
+            "description": "Resposta completa em JSON. Confira `choices[0].message.content`, as citações `[n]` e a lista `sources` (arquivo, páginas e score).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"{{model}}\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"O que é matriciamento em saúde mental?\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Respondeu com fontes', () => {",
+                  "    pm.expect(body.abstained).to.eql(false);",
+                  "    pm.expect(body.sources.length).to.be.above(0);",
+                  "});",
+                  "console.log(body.choices[0].message.content);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pergunta no escopo (streaming SSE)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/chat/completions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "chat",
+                "completions"
+              ]
+            },
+            "description": "Com `stream: true` a resposta chega em eventos SSE (`chat.completion.chunk`). O último chunk traz `sources` e `abstained`, seguido de `data: [DONE]`. No Postman os eventos aparecem um a um na aba de resposta.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"{{model}}\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Quais são as principais estratégias de cuidado em saúde mental na atenção primária?\"\n    }\n  ],\n  \"stream\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pergunta fora do escopo (abstenção)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/chat/completions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "chat",
+                "completions"
+              ]
+            },
+            "description": "Sem trecho com similaridade suficiente, a API se abstém sem chamar o LLM: `abstained: true` e `sources: []`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"{{model}}\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Qual é a receita de bolo de cenoura com cobertura de chocolate?\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Absteve-se', () => {",
+                  "    pm.expect(body.abstained).to.eql(true);",
+                  "    pm.expect(body.sources).to.eql([]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Conversa com histórico e top_k",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/chat/completions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "chat",
+                "completions"
+              ]
+            },
+            "description": "Só a **última** mensagem do usuário vira a pergunta (mensagens `system` do cliente são ignoradas). `top_k` (extensão, máximo 8) define quantos trechos recuperar.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"{{model}}\",\n  \"top_k\": 6,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Responda em inglês.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Olá!\"\n    },\n    {\n      \"role\": \"assistant\",\n      \"content\": \"Olá! Como posso ajudar?\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": [\n        {\n          \"type\": \"text\",\n          \"text\": \"O que é o\"\n        },\n        {\n          \"type\": \"text\",\n          \"text\": \"Projeto Terapêutico Singular?\"\n        }\n      ]\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Documentos (admin)",
+      "description": "Ingestão de PDFs em partes de até 4 MiB. Exige o `adminToken`. Antes de começar, preencha `fileName`, `fileSize` e `fileSha256` (veja `docs/manuais/TESTE_COM_POSTMAN.md`).",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{adminToken}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "Listar documentos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/documents",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "documents"
+              ]
+            },
+            "description": "Documentos da base com `status` (`processing`, `ready`, `failed`), `page_count` e `chunk_count`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1) Iniciar upload",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/documents/uploads",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "documents",
+                "uploads"
+              ]
+            },
+            "description": "Abre a sessão de upload. Grava `uploadId` e `partNumber` (=1) e mostra no console quantas partes enviar.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"filename\": \"{{fileName}}\",\n  \"size\": {{fileSize}},\n  \"sha256\": \"{{fileSha256}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "['fileName', 'fileSize', 'fileSha256'].forEach(name => {",
+                  "    if (!pm.variables.get(name)) {",
+                  "        throw new Error(`Preencha a variável ${name} na aba Variables da coleção.`);",
+                  "    }",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const upload = pm.response.json();",
+                  "pm.collectionVariables.set('uploadId', upload.id);",
+                  "pm.collectionVariables.set('partNumber', 1);",
+                  "console.log(`Upload ${upload.id}: envie ${upload.total_parts} parte(s) de até ${upload.part_size} bytes.`);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2) Enviar parte",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/octet-stream"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/documents/uploads/{{uploadId}}/parts/{{partNumber}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "documents",
+                "uploads",
+                "{{uploadId}}",
+                "parts",
+                "{{partNumber}}"
+              ]
+            },
+            "description": "Envie a parte de número `partNumber` (aba Body → binary → selecione o arquivo da parte, ex.: `parte-01`). Após o sucesso, `partNumber` passa a apontar para a próxima parte faltante; repita até o console indicar que todas chegaram.",
+            "body": {
+              "mode": "file",
+              "file": {
+                "src": ""
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code !== 200) return;",
+                  "const upload = pm.response.json();",
+                  "const missing = [];",
+                  "for (let n = 1; n <= upload.total_parts; n++) {",
+                  "    if (!upload.received_parts.includes(n)) missing.push(n);",
+                  "}",
+                  "if (missing.length) {",
+                  "    pm.collectionVariables.set('partNumber', missing[0]);",
+                  "    console.log(`Recebidas: ${upload.received_parts}. Próxima parte: ${missing[0]}.`);",
+                  "} else {",
+                  "    console.log('Todas as partes foram recebidas. Execute \"3) Concluir upload\".');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar progresso do upload",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/documents/uploads/{{uploadId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "documents",
+                "uploads",
+                "{{uploadId}}"
+              ]
+            },
+            "description": "Mostra `received_parts`: use para retomar um upload interrompido."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3) Concluir upload",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/documents/uploads/{{uploadId}}/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "documents",
+                "uploads",
+                "{{uploadId}}",
+                "complete"
+              ]
+            },
+            "description": "Valida partes, tamanho, SHA-256 e se o arquivo é PDF; extrai o texto e responde 202 com o documento em `processing`. Os embeddings são gerados em background. Grava `documentId`. Um PDF idêntico a um já existente retorna o documento existente."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 202', () => pm.response.to.have.status(202));",
+                  "const document = pm.response.json();",
+                  "pm.collectionVariables.set('documentId', document.id);",
+                  "console.log(`Documento ${document.id}: ${document.status}`);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4) Consultar documento",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/documents/{{documentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "documents",
+                "{{documentId}}"
+              ]
+            },
+            "description": "Repita até `status` virar `ready` (ou `failed`, com o motivo em `error`)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const document = pm.response.json();",
+                  "console.log(`Status: ${document.status} | páginas: ${document.page_count} | trechos: ${document.chunk_count}`);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Erros esperados",
+      "description": "Cenários negativos. Todo erro segue o formato da OpenAI: `{\"error\": {\"message\", \"type\", \"param\", \"code\"}}`.",
+      "item": [
+        {
+          "name": "Sem token (401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/models",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "models"
+              ]
+            },
+            "description": "Requisição sem `Authorization`.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Token de acesso em rota admin (401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/documents",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "documents"
+              ]
+            },
+            "description": "O `accessToken` não abre as rotas de documentos; elas exigem o `adminToken`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Modelo inexistente (404)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/chat/completions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "chat",
+                "completions"
+              ]
+            },
+            "description": "Modelos fora da lista configurada são recusados.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"gpt-4o\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Olá\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Erro no formato da OpenAI', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.be.an('object');",
+                  "    pm.expect(body.error.code).to.eql(\"model_not_found\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pergunta longa demais (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/chat/completions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "chat",
+                "completions"
+              ]
+            },
+            "description": "Perguntas acima de 4000 caracteres são recusadas. O pre-request script gera o texto.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"{{longQuestion}}\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('longQuestion', 'a'.repeat(4001));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Erro no formato da OpenAI', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.be.an('object');",
+                  "    pm.expect(body.error.code).to.eql(\"question_too_long\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Parâmetro não suportado (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/chat/completions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "chat",
+                "completions"
+              ]
+            },
+            "description": "`tools`, `functions`, `tool_choice`, `function_call` e `logprobs` não são suportados.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Olá\"\n    }\n  ],\n  \"tools\": [\n    {\n      \"type\": \"function\",\n      \"function\": {\n        \"name\": \"x\"\n      }\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Erro no formato da OpenAI', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.be.an('object');",
+                  "    pm.expect(body.error.code).to.eql(\"unsupported_parameter\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sem mensagem do usuário (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/chat/completions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "chat",
+                "completions"
+              ]
+            },
+            "description": "A conversa precisa terminar com uma mensagem `user` com texto.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"messages\": [\n    {\n      \"role\": \"assistant\",\n      \"content\": \"Olá\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Erro no formato da OpenAI', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.be.an('object');",
+                  "    pm.expect(body.error.code).to.eql(\"invalid_messages\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000",
+      "type": "string",
+      "description": "URL da API (troque pela URL do Cloud Run para testar produção)."
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string",
+      "description": "API_ACCESS_TOKEN do .env: chat e modelos."
+    },
+    {
+      "key": "adminToken",
+      "value": "",
+      "type": "string",
+      "description": "API_ADMIN_TOKEN do .env: documentos."
+    },
+    {
+      "key": "model",
+      "value": "",
+      "type": "string",
+      "description": "Preenchida por 'Listar modelos'. Vazia: o campo model é omitido e a API usa o modelo padrão."
+    },
+    {
+      "key": "fileName",
+      "value": "",
+      "type": "string",
+      "description": "Nome do PDF a enviar (ex.: apostila.pdf)."
+    },
+    {
+      "key": "fileSize",
+      "value": "",
+      "type": "string",
+      "description": "Tamanho do PDF em bytes."
+    },
+    {
+      "key": "fileSha256",
+      "value": "",
+      "type": "string",
+      "description": "SHA-256 do PDF (hex minúsculo)."
+    },
+    {
+      "key": "uploadId",
+      "value": "",
+      "type": "string",
+      "description": "Preenchida por '1) Iniciar upload'."
+    },
+    {
+      "key": "partNumber",
+      "value": "1",
+      "type": "string",
+      "description": "Parte a enviar; atualizada por '2) Enviar parte'."
+    },
+    {
+      "key": "documentId",
+      "value": "",
+      "type": "string",
+      "description": "Preenchida por '3) Concluir upload'."
+    }
+  ]
+}
