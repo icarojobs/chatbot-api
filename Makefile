@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help sync install run test lint format typecheck check up down logs
+.PHONY: help sync install run test lint format typecheck check up down logs deploy ingest-prod
 
 MERGED_PR_LIMIT := 200
 
@@ -43,3 +43,11 @@ down: ## Derruba os containers
 
 logs: ## Acompanha os logs da API
 	docker compose logs -f api
+
+ENV_PRODUCTION := .env.production
+
+deploy: ## Deploy no Cloud Run (requer gcloud autenticado e .env.production)
+	scripts/deploy/cloud_run.sh $(ENV_PRODUCTION)
+
+ingest-prod: ## Ingere docs/apostilas no banco de produção com o embedding de produção
+	set -a && . ./$(ENV_PRODUCTION) && set +a && API_ENV=production uv run python -m chatbot_api.ingest docs/apostilas
