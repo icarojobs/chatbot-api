@@ -1,4 +1,6 @@
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
+
+from chatbot_api.providers.base import ChatMessage
 
 FAKE_EMBEDDING_MODEL = "fake-embedding"
 FAKE_DIMENSION = 8
@@ -27,6 +29,24 @@ class FakeEmbeddingProvider:
 
     async def close(self) -> None:
         return None
+
+
+class FakeChatProvider:
+    def __init__(
+        self, tokens: Sequence[str] = ("Resposta", " baseada", " nas apostilas [1].")
+    ) -> None:
+        self.tokens = list(tokens)
+        self.calls: list[tuple[str, list[ChatMessage], int]] = []
+        self.error: Exception | None = None
+
+    async def stream_chat(
+        self, *, model: str, messages: Sequence[ChatMessage], max_output_tokens: int
+    ) -> AsyncIterator[str]:
+        self.calls.append((model, list(messages), max_output_tokens))
+        for token in self.tokens:
+            if self.error is not None:
+                raise self.error
+            yield token
 
 
 def _escape(text: str) -> bytes:
