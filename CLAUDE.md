@@ -41,7 +41,7 @@ Portas do host são configuráveis no `.env` (`API_HOST_PORT`, `POSTGRES_HOST_PO
 
 Stack (versões sempre pinadas, nunca `latest`): Python 3.14.x, uv 0.13.x, FastAPI 0.162.x (com docs automáticas), SDK `openai`, LangGraph 1.2.x, PostgreSQL + pgvector.
 
-**O desenvolvimento segue `docs/planejamento/PLANO_DE_DESENVOLVIMENTO.md` (1 PR por fase, usando `.github/pull_request_template.md`). Decisões de base na `docs/RFC/RFC-0002.md` — consulte antes de propor algo que as contradiga.** Todas as fases do plano foram implementadas; os workflows `CI` (lint, tipos, testes) e `Security` (CodeQL, Semgrep, pip-audit, Gitleaks, Trivy) rodam em todo PR.
+**O desenvolvimento segue `docs/planejamento/PLANO_DE_DESENVOLVIMENTO.md` (1 PR por fase, usando `.github/pull_request_template.md`). Decisões de base na `docs/RFC/RFC-0002.md` — consulte antes de propor algo que as contradiga.** Todas as fases do plano foram implementadas; os workflows `CI` (lint, tipos, testes) e `Security` (CodeQL, Semgrep, pip-audit, Gitleaks, Trivy) rodam em todo PR. A `main` é protegida: push direto e force push bloqueados (inclusive para admins), merge só via PR com os 6 checks verdes e branch atualizada; nunca desative esses workflows.
 
 ## Objetivo e arquitetura
 
