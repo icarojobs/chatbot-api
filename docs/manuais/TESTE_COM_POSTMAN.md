@@ -9,8 +9,9 @@ Passo a passo para testar a Chatbot API pelo [Postman](https://www.postman.com/d
 | 1. Saúde | nenhum | `GET /health` e `GET /ready` |
 | 2. Modelos | `accessToken` | Lista os modelos com o `type` (`chat` ou `embedding`), preenche a variável `model` e detalha um modelo |
 | 3. Chat (RAG) | `accessToken` | Pergunta com e sem streaming, abstenção fora do escopo, conversa com histórico e `top_k` |
-| 4. Documentos (admin) | `adminToken` | Listagem e o fluxo completo de upload em partes |
+| 4. Documentos (admin) | `adminToken` | Listagem, upload direto e o fluxo completo de upload em partes |
 | 5. Erros esperados | variado | 401, 404 e 400 no formato de erro da OpenAI |
+| 6. Exclusão (admin, destrutivo) | `adminToken` | Excluir um documento e reset da base. Execute só manualmente |
 
 Cada requisição tem descrição (aba **Docs**) e testes automáticos (aba **Tests**/**Scripts**). Variáveis como `model`, `uploadId`, `partNumber` e `documentId` são preenchidas sozinhas pelas respostas.
 
@@ -85,11 +86,24 @@ Para fazer outra pergunta, edite o texto em **Body → raw**.
 
 **Conversa com histórico e top_k**: mostra que só a **última** mensagem do usuário vira a pergunta, que mensagens `system` enviadas pelo cliente são ignoradas (a resposta continua em pt-br) e que `top_k` (máximo 8) muda quantos trechos são recuperados.
 
-## 6. Enviar um PDF (upload em partes)
+## 6. Enviar um PDF
 
-O upload é feito em partes de até **4 MiB** (4.194.304 bytes). Como o Postman não calcula hash nem divide arquivos, prepare isso no terminal primeiro.
+### Upload direto (recomendado para testes)
 
-### 6.1 Calcular tamanho e SHA-256
+Para PDFs de até 30 MB, uma requisição basta:
+
+1. Na aba **Variables** da coleção, preencha `fileName` (ex.: `apostila.pdf`) e salve.
+2. **4. Documentos (admin) → Upload direto (PDF em uma requisição)** → **Body → binary** → selecione o PDF → **Send**.
+3. A resposta é `202` com o documento em `processing`, e `documentId` é preenchida.
+4. **4) Consultar documento** até `status` ser `ready`.
+
+As apostilas de `docs/apostilas` (de 5,6 a 16 MB) cabem no upload direto.
+
+### Upload em partes
+
+Para arquivos acima de 30 MB, ou para testar a retomada de upload, o envio é feito em partes de até **4 MiB** (4.194.304 bytes). Como o Postman não calcula hash nem divide arquivos, prepare isso no terminal primeiro.
+
+#### Calcular tamanho e SHA-256
 
 **Linux:**
 
@@ -112,7 +126,7 @@ shasum -a 256 apostila.pdf
 (Get-FileHash apostila.pdf -Algorithm SHA256).Hash.ToLower()
 ```
 
-### 6.2 Dividir o arquivo em partes
+#### Dividir o arquivo em partes
 
 Arquivos de até 4 MiB não precisam ser divididos: a parte 1 é o próprio PDF.
 
@@ -134,7 +148,7 @@ for ($i = 0; $i * $size -lt $bytes.Length; $i++) {
 }
 ```
 
-### 6.3 Enviar pela coleção
+#### Enviar pela coleção
 
 1. Na aba **Variables** da coleção, preencha `fileName` (ex.: `apostila.pdf`), `fileSize` (bytes) e `fileSha256` (hex minúsculo). Salve.
 2. **4. Documentos (admin) → 1) Iniciar upload**: responde `201` e grava `uploadId`. O console do Postman (**View → Show Postman Console**) informa quantas partes enviar.
@@ -156,7 +170,14 @@ Enviar um PDF idêntico a um já existente retorna o documento existente (dedupl
 | 415 | `unsupported_file_type` | O arquivo não é PDF |
 | 422 | `checksum_mismatch` | `fileSha256` ou alguma parte está errada |
 
-## 7. Erros esperados
+## 7. Excluir documentos
+
+A pasta **6. Exclusão (admin, destrutivo)** apaga dados de verdade:
+
+- **Excluir documento:** remove o documento da variável `documentId` (preenchida pelos uploads) com seus trechos e embeddings, e responde `204`. Para excluir outro, copie o `id` em **Listar documentos** e cole em `documentId`. Depois, uma pergunta sobre o conteúdo dele não deve mais citá-lo em `sources`.
+- **Reset da base:** remove todos os documentos, trechos, embeddings e uploads, e mostra no console quantos foram removidos. Sem `confirm=true` a API responde `400` e nada é apagado (há um teste disso na pasta 5). Em produção o reset responde `403 reset_disabled`, a menos que `DOCUMENTS_RESET_ENABLED=true`. Para recarregar as apostilas depois, rode `make ingest` (dev) ou use o upload direto.
+
+## 8. Erros esperados
 
 A pasta **5. Erros esperados** valida os cenários negativos. Todos voltam no formato da OpenAI:
 
@@ -170,21 +191,24 @@ A pasta **5. Erros esperados** valida os cenários negativos. Todos voltam no fo
 | Token de acesso em rota admin | `401` |
 | Modelo inexistente | `404` `model_not_found` |
 | Modelo de embedding no chat | `400` `invalid_model_type` |
+| Reset sem confirmação | `400` `confirmation_required` |
 | Pergunta longa demais (mais de 4000 caracteres) | `400` `question_too_long` |
 | Parâmetro não suportado (`tools`) | `400` `unsupported_parameter` |
 | Sem mensagem do usuário | `400` `invalid_messages` |
 
 **Rate limit:** todas as rotas aceitam até `RATE_LIMIT_DEFAULT` requisições por IP (padrão `60/minute`). Para ver o `429`, rode **Health** no Collection Runner com 70 iterações e delay `0`.
 
-## 8. Rodar tudo de uma vez (Collection Runner)
+## 9. Rodar tudo de uma vez (Collection Runner)
 
 1. Clique com o botão direito na coleção → **Run collection**.
-2. Desmarque as requisições de upload da pasta **4. Documentos (admin)** (exceto **Listar documentos**), que dependem dos arquivos das partes.
+2. Desmarque:
+   - as requisições de upload da pasta **4. Documentos (admin)** (exceto **Listar documentos**), que dependem de arquivos selecionados;
+   - **toda** a pasta **6. Exclusão (admin, destrutivo)**.
 3. **Run**. Todos os testes devem passar (verde).
 
 Em desenvolvimento, sem GPU, a execução completa leva cerca de 2 a 3 minutos por causa das três gerações do LLM.
 
-## 9. Testar outro ambiente
+## 10. Testar outro ambiente
 
 Para testar **localmente com os modelos de produção**, rode `make up-prod`; para voltar ao desenvolvimento, `make up`. Mudar `API_ENV` no `.env` não afeta o container. Veja a seção "Alternar entre desenvolvimento e produção (local)" do README. A `baseUrl` e os tokens continuam os mesmos. Rode **Listar modelos** de novo: se `model` guardar um modelo que não existe no ambiente atual, ela é trocada pelo primeiro modelo `chat`.
 

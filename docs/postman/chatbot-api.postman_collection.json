@@ -411,6 +411,66 @@
           ]
         },
         {
+          "name": "Upload direto (PDF em uma requisição)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/pdf"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/documents?filename={{fileName}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "documents"
+              ],
+              "query": [
+                {
+                  "key": "filename",
+                  "value": "{{fileName}}"
+                }
+              ]
+            },
+            "description": "Caminho mais simples: em **Body → binary** selecione o PDF inteiro (até 30 MB, `DIRECT_UPLOAD_MAX_BYTES`) e preencha a variável `fileName`. Responde 202 com o documento em `processing` e grava `documentId`. Para arquivos maiores ou conexões instáveis, use o upload em partes (1 a 4).",
+            "body": {
+              "mode": "file",
+              "file": {
+                "src": ""
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.variables.get('fileName')) {",
+                  "    throw new Error('Preencha a variável fileName na aba Variables da coleção.');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 202', () => pm.response.to.have.status(202));",
+                  "const document = pm.response.json();",
+                  "pm.collectionVariables.set('documentId', document.id);",
+                  "console.log(`Documento ${document.id}: ${document.status} | páginas: ${document.page_count} | trechos: ${document.chunk_count}`);"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "1) Iniciar upload",
           "request": {
             "method": "POST",
@@ -806,6 +866,50 @@
           ]
         },
         {
+          "name": "Reset sem confirmação (400)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/documents",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "documents"
+              ]
+            },
+            "description": "Sem `confirm=true` o reset é recusado e nada é apagado.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Erro no formato da OpenAI', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.be.an('object');",
+                  "    pm.expect(body.error.code).to.eql(\"confirmation_required\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Pergunta longa demais (400)",
           "request": {
             "method": "POST",
@@ -962,6 +1066,90 @@
           ]
         }
       ]
+    },
+    {
+      "name": "6. Exclusão (admin, destrutivo)",
+      "description": "Remove documentos da base (trechos e embeddings juntos, irreversível). Fica fora do Collection Runner: execute manualmente. Exige o `adminToken`.",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{adminToken}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "Excluir documento",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/documents/{{documentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "documents",
+                "{{documentId}}"
+              ]
+            },
+            "description": "Remove o documento da variável `documentId` (preenchida pelos uploads) com seus trechos e embeddings: ele deixa de aparecer nas respostas do chat. Responde 204 sem corpo; 404 se não existir."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 204', () => pm.response.to.have.status(204));",
+                  "pm.collectionVariables.set('documentId', '');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reset da base (apaga TODOS os documentos)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/documents?confirm=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "documents"
+              ],
+              "query": [
+                {
+                  "key": "confirm",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Remove todos os documentos, trechos, embeddings e uploads em andamento. Exige `confirm=true` (sem ele: 400 `confirmation_required`). Desabilitado em produção (403 `reset_disabled`), salvo com `DOCUMENTS_RESET_ENABLED=true`. Depois, reingira a base com `make ingest` ou pelos uploads."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "console.log(`Removidos: ${body.deleted_documents} documento(s), ${body.deleted_uploads} upload(s).`);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "variable": [
@@ -1023,7 +1211,7 @@
       "key": "documentId",
       "value": "",
       "type": "string",
-      "description": "Preenchida por '3) Concluir upload'."
+      "description": "Preenchida pelo upload direto ou por '3) Concluir upload'."
     }
   ]
 }
