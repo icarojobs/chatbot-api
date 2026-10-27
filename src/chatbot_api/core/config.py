@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     provider_max_retries: int = Field(default=1, ge=0)
     llm_max_output_tokens: int = Field(default=1500, gt=0)
 
-    rag_top_k_default: int = Field(default=4, ge=1)
+    rag_top_k_default: int = Field(default=6, ge=1)
     rag_top_k_max: int = Field(default=8, ge=1)
     rag_min_score: float | None = Field(default=None, ge=0, le=1)
     rag_context_max_chars: int = Field(default=18000, gt=0)

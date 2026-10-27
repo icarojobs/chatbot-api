@@ -231,10 +231,10 @@ CHAT_EXAMPLES: dict[str, dict[str, Any]] = {
     "modelo_e_top_k": {
         "summary": "Escolhendo o modelo e a quantidade de trechos (top_k)",
         "description": "`model`: um id com `type: chat` em `GET /v1/models`. "
-        "`top_k`: trechos recuperados (padrão 4, máximo 8).",
+        "`top_k`: trechos recuperados (padrão 6, máximo 8).",
         "value": {
             "model": "qwen3:4b-instruct-2507-q4_K_M",
-            "top_k": 6,
+            "top_k": 8,
             "messages": [
                 _user("Quais são as estratégias de cuidado em saúde mental na atenção primária?")
             ],
