@@ -70,7 +70,7 @@ curl -N http://localhost:8000/v1/chat/completions \
   -d '{"stream": true, "messages": [{"role": "user", "content": "O que é matriciamento?"}]}'
 ```
 
-Uso completo da API: [manual](docs/manuais/MANUAL_DA_API.md).
+Uso completo da API: [manual](docs/manuais/MANUAL_DA_API.md). Deploy em produção (Cloud Run + Neon): [guia](docs/hospedagem/DEPLOY.md).
 
 ---
 
