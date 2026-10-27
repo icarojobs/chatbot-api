@@ -1,11 +1,12 @@
+from collections.abc import Callable
 from http import HTTPStatus
 
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
+from chatbot_api.core.config import Settings
 from chatbot_api.core.errors import ApiError, ErrorType
-from chatbot_api.main import create_app
 from tests.conftest import TEST_BASE_URL, SettingsFactory
 
 SECRET_DETAIL = "db password=hunter2"
@@ -64,8 +65,10 @@ async def test_unexpected_error_hides_details(client: AsyncClient) -> None:
     assert SECRET_DETAIL not in response.text
 
 
-async def test_rate_limit_applies_to_every_route(settings_factory: SettingsFactory) -> None:
-    app = create_app(settings_factory(rate_limit_default="2/minute"))
+async def test_rate_limit_applies_to_every_route(
+    settings_factory: SettingsFactory, app_factory: Callable[[Settings], FastAPI]
+) -> None:
+    app = app_factory(settings_factory(rate_limit_default="2/minute"))
     transport = ASGITransport(app=app)
 
     async with AsyncClient(transport=transport, base_url=TEST_BASE_URL) as client:

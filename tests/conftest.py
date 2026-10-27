@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator, Callable, Iterator
+from collections.abc import AsyncIterator, Callable
 from typing import Any
 
 import pytest
@@ -76,8 +76,21 @@ def settings(settings_factory: SettingsFactory) -> Settings:
 
 
 @pytest.fixture
-def app(settings: Settings) -> Iterator[FastAPI]:
-    yield create_app(settings)
+async def app_factory() -> AsyncIterator[Callable[[Settings], FastAPI]]:
+    created: list[FastAPI] = []
+
+    def build(app_settings: Settings) -> FastAPI:
+        created.append(create_app(app_settings))
+        return created[-1]
+
+    yield build
+    for application in created:
+        await application.state.engine.dispose()
+
+
+@pytest.fixture
+def app(settings: Settings, app_factory: Callable[[Settings], FastAPI]) -> FastAPI:
+    return app_factory(settings)
 
 
 @pytest.fixture
