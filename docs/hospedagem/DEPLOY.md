@@ -30,7 +30,7 @@ cp .env.production.example .env.production   # ignorado pelo git
 openssl rand -hex 32                           # gere API_ACCESS_TOKEN e API_ADMIN_TOKEN novos
 ```
 
-Preencha `GCP_PROJECT_ID`, `DATABASE_URL` (Neon), as credenciais do provedor e `RAG_MIN_SCORE` (valor calibrado para o embedding de produção no ADR-0006).
+Preencha `GCP_PROJECT_ID`, `DATABASE_URL` (Neon) e as credenciais do provedor. O limiar de similaridade é escolhido automaticamente para o modelo de embedding (calibração no ADR-0006).
 
 ## 5. Ingestão das apostilas no banco de produção
 

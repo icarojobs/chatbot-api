@@ -38,7 +38,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
         app.state.provider = provider
         app.state.rag_service = build_rag_service(
-            provider, provider, app.state.session_factory, resolved_settings
+            provider, provider, app.state.session_factory, resolved_settings, profile.min_score
         )
         try:
             yield

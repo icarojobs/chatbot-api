@@ -43,7 +43,9 @@ def rag_service(
     app: FastAPI, settings: Settings, chat: FakeChatProvider, retriever: FakeRetriever
 ) -> None:
     rag_settings = RAGSettings(
-        settings.rag_min_score, settings.rag_context_max_chars, settings.llm_max_output_tokens
+        app.state.provider_profile.min_score,
+        settings.rag_context_max_chars,
+        settings.llm_max_output_tokens,
     )
     nodes = RAGNodes(FakeEmbeddingProvider(), chat, retriever, rag_settings)
     app.state.rag_service = RAGService(build_rag_graph(nodes))
