@@ -164,7 +164,10 @@ Deploy no **Google Cloud Run + Neon** com `make deploy` — passo a passo em [do
 | `GET` | `/health`, `/ready` | — | Liveness e readiness (inclui o banco) |
 | `GET` | `/v1/models` | acesso | Modelos do ambiente (formato OpenAI) com `type`: `chat` (gera respostas) ou `embedding` (busca do RAG) |
 | `POST` | `/v1/chat/completions` | acesso | Pergunta/resposta com RAG, `stream` opcional |
+| `POST` | `/v1/documents?filename=…` | admin | Upload direto de um PDF (até 30 MB, corpo binário) |
 | `POST` | `/v1/documents/uploads` (+ `parts`, `complete`) | admin | Upload em partes de PDFs |
+| `DELETE` | `/v1/documents/{id}` | admin | Remove um documento (trechos e embeddings juntos) |
+| `DELETE` | `/v1/documents?confirm=true` | admin | Reset: remove todos os documentos (desabilitado em produção por padrão) |
 | `GET` | `/v1/documents`, `/v1/documents/{id}` | admin | Documentos e status da ingestão |
 
 Com o SDK oficial da OpenAI:

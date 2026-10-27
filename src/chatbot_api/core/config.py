@@ -56,6 +56,8 @@ class Settings(BaseSettings):
 
     upload_max_bytes: int = Field(default=50 * 1024 * 1024, gt=0)
     upload_ttl_minutes: int = Field(default=60, gt=0)
+    direct_upload_max_bytes: int = Field(default=30 * 1024 * 1024, gt=0)
+    documents_reset_enabled: bool | None = None
 
     @field_validator(
         "openai_response_models",
@@ -87,6 +89,12 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.api_env is Environment.PRODUCTION
+
+    @property
+    def documents_reset_allowed(self) -> bool:
+        if self.documents_reset_enabled is None:
+            return not self.is_production
+        return self.documents_reset_enabled
 
 
 @lru_cache

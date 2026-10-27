@@ -110,7 +110,42 @@ Detalha um modelo, incluindo o `type`. IDs com `/` são aceitos (ex.: `/v1/model
 
 ## Documentos (base de conhecimento)
 
-Todas as rotas abaixo exigem o **`API_ADMIN_TOKEN`**. O envio é feito **em partes de até 4 MiB** (abaixo do limite de 4,5 MB por requisição de algumas hospedagens), o que permite arquivos grandes e retomada após falha de rede. Tamanho máximo padrão: 50 MB (`UPLOAD_MAX_BYTES`); a sessão expira em 60 minutos (`UPLOAD_TTL_MINUTES`).
+Todas as rotas abaixo exigem o **`API_ADMIN_TOKEN`**. Há duas formas de enviar um PDF:
+
+| Forma | Quando usar |
+|---|---|
+| **Upload direto** (`POST /v1/documents`) | PDFs de até 30 MB (`DIRECT_UPLOAD_MAX_BYTES`), em uma única requisição. Ideal para o Swagger (`/docs`), o Postman e scripts simples |
+| **Upload em partes** (`/v1/documents/uploads`) | Arquivos maiores, conexões instáveis (permite retomar) ou hospedagens com limite baixo por requisição |
+
+As duas formas passam pela mesma validação (nome, PDF, deduplicação por SHA-256) e pela mesma ingestão.
+
+### Upload direto: `POST /v1/documents?filename={nome}`
+
+O corpo é o PDF em binário (`Content-Type: application/pdf`). A resposta é **`202`** com o documento em `processing`. Os embeddings são gerados em background; acompanhe em `GET /v1/documents/{id}` até `ready`.
+
+```bash
+curl -X POST "http://localhost:8000/v1/documents?filename=apostila.pdf" \
+  -H "Authorization: Bearer $API_ADMIN_TOKEN" \
+  -H "Content-Type: application/pdf" \
+  --data-binary @apostila.pdf
+```
+
+No Swagger (`/docs`):
+1. Clique em **Authorize** e informe o `API_ADMIN_TOKEN`.
+2. Abra **POST /v1/documents** → **Try it out**.
+3. Preencha `filename` e escolha o arquivo no campo do corpo.
+4. Clique em **Execute**.
+
+| Status | `code` | Causa |
+|---|---|---|
+| 400 | `invalid_filename` | Nome inválido |
+| 413 | `file_too_large` | Acima de `DIRECT_UPLOAD_MAX_BYTES`: use o upload em partes |
+| 415 | `unsupported_file_type` | O conteúdo não é PDF |
+| 422 | `invalid_document` | PDF sem texto extraível |
+
+### Upload em partes
+
+O envio é feito **em partes de até 4 MiB** (abaixo do limite de 4,5 MB por requisição de algumas hospedagens), o que permite arquivos grandes e retomada após falha de rede. Tamanho máximo padrão: 50 MB (`UPLOAD_MAX_BYTES`); a sessão expira em 60 minutos (`UPLOAD_TTL_MINUTES`).
 
 ### Fluxo
 
@@ -177,6 +212,31 @@ with httpx.Client(base_url="http://localhost:8000", headers=headers, timeout=120
 ### `GET /v1/documents` e `GET /v1/documents/{id}`
 
 Listam/detalham documentos com `status` (`processing`, `ready`, `failed`), `page_count` e `chunk_count`.
+
+### `DELETE /v1/documents/{id}`
+
+Remove o documento com todos os seus trechos e embeddings; ele deixa de ser usado nas respostas imediatamente. Responde **`204`** sem corpo, ou `404` se o documento não existir. Uma geração de embeddings em background para esse documento é descartada sem erro.
+
+```bash
+curl -X DELETE http://localhost:8000/v1/documents/<id> -H "Authorization: Bearer $API_ADMIN_TOKEN"
+```
+
+### `DELETE /v1/documents?confirm=true` (reset)
+
+Remove **todos** os documentos, trechos, embeddings e uploads em andamento. Irreversível.
+
+```bash
+curl -X DELETE "http://localhost:8000/v1/documents?confirm=true" -H "Authorization: Bearer $API_ADMIN_TOKEN"
+# {"deleted_documents": 4, "deleted_uploads": 2}
+```
+
+| Status | `code` | Causa |
+|---|---|---|
+| 400 | `confirmation_required` | Faltou `confirm=true` (nada é apagado) |
+| 403 | `reset_disabled` | Reset desabilitado no ambiente |
+
+Por padrão o reset fica habilitado em `development` e **desabilitado em `production`**. Para mudar, defina `DOCUMENTS_RESET_ENABLED=true` (ou `false`). Depois de um reset, reingira a base com `make ingest` ou com os uploads.
+
 
 ## Chat (RAG)
 

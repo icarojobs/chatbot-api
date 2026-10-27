@@ -57,3 +57,26 @@ def test_reads_environment_variables(monkeypatch: pytest.MonkeyPatch, tmp_path: 
 
     assert settings.openai_response_models == ("m1", "m2")
     get_settings.cache_clear()
+
+
+@pytest.mark.parametrize(
+    ("api_env", "enabled", "allowed"),
+    [
+        ("development", None, True),
+        ("production", None, False),
+        ("production", True, True),
+        ("development", False, False),
+    ],
+)
+def test_documents_reset_is_disabled_in_production_by_default(
+    settings_factory: SettingsFactory, api_env: str, enabled: bool | None, allowed: bool
+) -> None:
+    provider = {
+        "openai_base_url": "https://provider.test/v1",
+        "openai_access_key": "key",
+        "openai_response_models": "azure/gpt-5-mini",
+        "openai_embeddings_models": "cohere/embed-v4.0",
+    }
+    settings = settings_factory(api_env=api_env, documents_reset_enabled=enabled, **provider)
+
+    assert settings.documents_reset_allowed is allowed
