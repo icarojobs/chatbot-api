@@ -11,7 +11,11 @@ make run         # API local com reload em :8000 (uvicorn --factory chatbot_api.
 make check       # ruff + mypy strict + pytest com --cov-fail-under=95 (o mesmo que a CI)
 make up / down   # docker compose: api, postgres (pgvector) e ollama (+ ollama-models baixa os modelos de dev)
 uv run pytest tests/integration/test_health.py::test_health_is_ok   # um teste específico
+uv run python -m chatbot_api.ingest docs/apostilas                  # ingere PDFs (idempotente)
+uv run python -m chatbot_api.db.migrate                             # aplica migrations (o container já roda no start)
 ```
+
+Os testes de integração usam um Postgres real: `TEST_DATABASE_URL` no `.env` (banco `chatbot_test`, criado com `docker compose exec postgres createdb -U chatbot chatbot_test`). A fixture de sessão recria o schema e roda as migrations; cada teste com `session_factory` trunca as tabelas ao final.
 
 Portas do host são configuráveis no `.env` (`API_HOST_PORT`, `POSTGRES_HOST_PORT`, `OLLAMA_HOST_PORT`); nesta máquina a 5432 é usada por outro projeto, então o Postgres sobe na 5433. GPU para o Ollama: `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up` (requer NVIDIA Container Toolkit, não instalado aqui).
 
@@ -24,6 +28,7 @@ Portas do host são configuráveis no `.env` (`API_HOST_PORT`, `POSTGRES_HOST_PO
 - Rate limit global por IP; atrás de proxy, `TRUSTED_PROXY_HOPS` define qual entrada do `X-Forwarded-For` é confiável.
 - `/ready` executa as funções em `app.state.readiness_checks` — novas dependências (banco, provedor) registram seu check ali.
 - Provedores (`providers/`): contratos `ChatModelProvider`/`EmbeddingProvider` e um único `OpenAICompatibleProvider` (SDK `openai`, que usa `httpx2` — nos testes use `httpx2.MockTransport`). `build_provider_profile` escolhe Ollama (dev) ou o provedor real (prod) pelo `API_ENV`; o cliente vive no lifespan (`app.state.provider`). Erros do SDK viram `ApiError` seguros em `providers/errors.py`.
+- Dados (`db/`, ADR-0003): `documents` → `chunks` (com `page_start`/`page_end`) → `chunk_embeddings` (chave `chunk_id` + `embedding_model`, coluna `vector` sem dimensão fixa; sem HNSW de propósito). Ingestão (`ingestion/`): `extract_pages` (pypdf + `normalize_text`, que restaura ligaduras fi/fl perdidas) → `chunk_pages` (frases, ~1500 chars) → `IngestionService` idempotente por SHA-256 e retomável. Mudou normalização/chunking? Os PDFs já ingeridos não são reprocessados — trunque `documents` e reingira.
 - Provedor real validado (ver ADR-0002): embeddings `cohere/embed-v4.0` com 1536 dimensões; `azure/gpt-5-mini` é modelo de raciocínio — use `max_completion_tokens` com folga (`LLM_MAX_OUTPUT_TOKENS`), senão a resposta sai vazia.
 
 Stack (versões sempre pinadas, nunca `latest`): Python 3.14.x, uv 0.13.x, FastAPI 0.162.x (com docs automáticas), SDK `openai`, LangGraph 1.2.x, PostgreSQL + pgvector.

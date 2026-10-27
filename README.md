@@ -59,6 +59,7 @@ Pré-requisitos: Docker com Compose v2 e, para desenvolvimento local, [uv](https
 cp .env.example .env              # preencha os tokens (openssl rand -hex 32) e POSTGRES_PASSWORD
 make up                           # API em http://localhost:8000 (docs em /docs), Postgres e Ollama
 make install && make check        # dependências, lint, tipos e testes (cobertura mínima de 95%)
+uv run python -m chatbot_api.ingest docs/apostilas   # carrega as apostilas na base (idempotente)
 ```
 
 Uso da API: [manual](docs/manuais/MANUAL_DA_API.md).
