@@ -81,6 +81,8 @@ class OpenAICompatibleProvider:
             raise translate_provider_error(exc) from exc
 
     async def embed(self, texts: Sequence[str]) -> list[list[float]]:
+        if not texts:
+            return []
         vectors: list[list[float]] = []
         for batch in batched(texts, EMBEDDING_BATCH_SIZE, strict=False):
             vectors.extend(await self._embed_batch(batch))

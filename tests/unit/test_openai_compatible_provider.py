@@ -177,3 +177,10 @@ async def test_translates_provider_errors(handler: Handler, status: HTTPStatus, 
     for error in (chat_error.value, embed_error.value):
         assert (error.status_code, error.code) == (status, code)
         assert "secret internals" not in error.message
+
+
+async def test_embedding_nothing_skips_the_provider() -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        raise AssertionError("provider must not be called")
+
+    assert await build_provider(handler).embed([]) == []

@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     app_name: str = "chatbot-api"
     log_level: str = "INFO"
 
+    database_url: SecretStr
+
     api_access_token: SecretStr = Field(min_length=MIN_TOKEN_LENGTH)
     api_admin_token: SecretStr = Field(min_length=MIN_TOKEN_LENGTH)
 
