@@ -1,0 +1,63 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Estado do projeto
+
+O repositório ainda está na fase de definição: há apenas documentação (`README.md`, `docs/`), sem código, `pyproject.toml`, testes ou Makefile. Os comandos de build/lint/teste ainda não existem — ao criá-los, atualize esta seção. O atalho `make sync` citado nas regras abaixo também precisa ser criado.
+
+Stack prevista (versões sempre pinadas, nunca `latest`): Python 3.15.x, uv 0.13.x, FastAPI 0.162.x (com docs automáticas), SDK `openai`, LangGraph 1.2.x.
+
+## Objetivo e arquitetura
+
+API de chatbot com RAG sobre uma base de conhecimento prévia (apostilas de saúde mental em `docs/apostilas/*.pdf`, ignoradas pelo git). Requisitos centrais:
+
+- Ingestão de documentos via API (PDFs > 16 MB → upload em chunks, para funcionar em qualquer hospedagem; ver `docs/hospedagem/DECISAO_TECNICA.md`).
+- Recuperação dos trechos relevantes → contexto para o LLM → resposta via streaming (SSE).
+- Escolha do modelo entre os configurados, sem reescrever a integração; formato de chamada idêntico ao da API da OpenAI.
+- Abster-se quando não houver evidência suficiente na base e expor as referências usadas.
+
+Fluxo planejado (LangGraph `StateGraph`): validar entrada → embedding da pergunta → recuperar top-k chunks (índice vetorial local) → avaliar suficiência → gerar resposta em streaming **ou** abster-se → finalizar metadados. O plano detalhado está em `playground/rag-chatbot-architecture.md` (não rastreado, rascunho local). Fora do escopo inicial: microserviços, filas/Redis, multiagentes, memória/checkpoint persistente, banco vetorial gerenciado, reranking antes de medir a qualidade.
+
+Hospedagem alvo: Google Cloud Run (preferido) ou Vercel; Render descartado (filesystem efêmero/suspensão).
+
+### Configuração e ambientes
+
+Variáveis em `.env` (não rastreado; exemplo em `.env.example`): `API_ENV`, `OPENAI_BASE_URL`, `OPENAI_ACCESS_KEY`, `OPENAI_RESPONSE_MODELS`, `OPENAI_EMBEDDINGS_MODELS`.
+
+- `API_ENV=development` (padrão): usar Ollama com modelos compatíveis com os do `.env`/README e suportáveis nesta máquina.
+- `API_ENV=production`: única situação em que o provedor real é chamado.
+- Testes unitários sempre com mocks, usando apenas uma amostra dos modelos configurados.
+- O endpoint é "compatível com OpenAI", mas não presuma que todos os parâmetros do SDK funcionam — valide com uma chamada pequena de embeddings e uma geração curta com streaming antes de processar a base inteira.
+
+## Regras obrigatórias do projeto
+
+Fonte: `docs/COMPORTAMENTO_DA_IA.md` (manter os dois arquivos em sincronia).
+
+**Rotina de abertura de toda sessão (não precisa ser pedida):**
+- `git checkout main && git pull`.
+- Remover branches locais cujo PR já foi mergeado. Os PRs usam squash merge, então `git branch --merged` não detecta nada — confirme com `gh pr list --state merged`.
+- Garantir que exista um `.mcp.json` na raiz com os MCP servers adequados ao projeto; **não escrever código sem ele**.
+
+**Antes de executar qualquer pedido:** discutir em formato de RFC, com perguntas de múltipla escolha já trazendo a recomendação. Ao fim do debate, gerar `docs/RFC/RFC-XXXX` (numeração incremental a partir de 0001). Mudanças de impacto significativo também geram um ADR detalhado em pt-br em `docs/ADR/ADR-XXXX`.
+
+**Código:**
+- Idioma: toda UI em pt-br com acentuação correta; código, banco, migrations e infraestrutura em en-us.
+- DRY, SOLID, Object Calisthenics; constantes no lugar de magic numbers/strings.
+- Complexidade ciclomática: aninhamento acima de 2 níveis no escopo trabalhado deve ser refatorado (extrair funções) sem quebrar comportamento ou testes.
+- Evitar comentários; só para regras de negócio de alta complexidade.
+- Todo endpoint precisa de rate limiting.
+- Vulnerabilidades encontradas: corrigir na hora e explicar o que foi feito.
+- Nenhum secret em arquivos rastreados (usar `.env` + `.env.example`).
+- Testes automatizados com cobertura mínima de 95% do codebase; tudo que for criado, corrigido ou refatorado precisa de testes.
+
+**Documentação a manter atualizada:**
+- `README.md`: profissional, com diagramas mermaid, descrição da base de conhecimento, decisões técnicas, como a IA foi usada (icarojobs como Arquiteto de Software; código gerado com Claude Code CLI + Opus 5.5) e passo a passo de execução com Docker em Linux, macOS e Windows WSL2.
+- `docs/manuais/*`: manual de uso da API detalhado, passo a passo.
+
+**Git / PR:**
+- Fluxo sempre via branch → PR → merge → pull na `main`, com commits semânticos e descrição dos PRs em pt-br.
+- Micro-commits a cada pequena etapa; um PR por módulo concluído.
+- Commits e PRs autorados pelo usuário do `git config --global` — **nunca citar a IA como coautora/colaboradora** (sem `Co-Authored-By`, sem rodapé "Generated with Claude Code").
+- `gh` já está configurado; usuário `icarojobs` (`gh auth switch --user icarojobs` se necessário).
+- `playground/` é sempre não rastreado (scripts e dados temporários).
