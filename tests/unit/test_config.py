@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -43,7 +45,9 @@ def test_rejects_short_tokens(settings_factory: SettingsFactory) -> None:
         settings_factory(api_access_token="short")
 
 
-def test_reads_environment_variables(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_reads_environment_variables(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@db:5432/app")
     monkeypatch.setenv("API_ACCESS_TOKEN", ACCESS_TOKEN)
     monkeypatch.setenv("API_ADMIN_TOKEN", ADMIN_TOKEN)
     monkeypatch.setenv("OPENAI_RESPONSE_MODELS", "m1,m2")
