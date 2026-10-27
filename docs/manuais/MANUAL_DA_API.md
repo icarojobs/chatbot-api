@@ -19,6 +19,14 @@ Endpoints que consomem créditos exigem o header `Authorization: Bearer <token>`
 
 Todas as rotas são limitadas por IP (padrão `60/minute`, configurável em `RATE_LIMIT_DEFAULT`). Ao exceder, a API responde `429` com o header `Retry-After` (segundos até liberar).
 
+## CORS
+
+A API aceita chamadas de navegador de **qualquer origem** por padrão (`CORS_ALLOWED_ORIGINS=*`), inclusive de um HTML aberto direto do disco (`file://`, origem `null`). Para restringir, liste as origens separadas por vírgula, por exemplo `CORS_ALLOWED_ORIGINS=https://app.exemplo.com,http://localhost:5500`.
+
+- O token vai no header `Authorization`; a API não usa cookies, por isso `Access-Control-Allow-Credentials` não é enviado.
+- Respostas de erro (`401`, `429`, …) também levam os headers CORS, então o navegador mostra o erro real.
+- Os headers `x-request-id` e `Retry-After` ficam legíveis no JavaScript (`Access-Control-Expose-Headers`).
+
 ## Formato de erro
 
 Todos os erros seguem o formato da API da OpenAI:
