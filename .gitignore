@@ -6,3 +6,12 @@ docs/apostilas/*
 
 # Esse diretório playground sempre tenho como untracked em todos projetos. Aqui coloco dados e scripts testes que realmente não precisam ser rastreados (scripts e dados temporários, conforme vou desenvolvendo o projeto)
 playground/
+
+# Python / ferramentas
+.venv/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/

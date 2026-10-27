@@ -2,13 +2,31 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Estado do projeto
+## Comandos
 
-O repositório ainda está na fase de definição: há apenas documentação (`README.md`, `docs/`), sem código, `pyproject.toml`, testes ou Makefile. Os comandos de build/lint/teste ainda não existem — ao criá-los, atualize esta seção. O atalho `make sync` citado nas regras abaixo também precisa ser criado.
+```bash
+make sync        # rotina de abertura: atualiza a main e remove branches de PRs mergeados
+make install     # uv sync --frozen (Python 3.14 + deps de dev)
+make run         # API local com reload em :8000 (uvicorn --factory chatbot_api.main:create_app)
+make check       # ruff + mypy strict + pytest com --cov-fail-under=95 (o mesmo que a CI)
+make up / down   # docker compose: api, postgres (pgvector) e ollama (+ ollama-models baixa qwen3:4b e bge-m3)
+uv run pytest tests/integration/test_health.py::test_health_is_ok   # um teste específico
+```
+
+Portas do host são configuráveis no `.env` (`API_HOST_PORT`, `POSTGRES_HOST_PORT`, `OLLAMA_HOST_PORT`); nesta máquina a 5432 é usada por outro projeto, então o Postgres sobe na 5433. GPU para o Ollama: `docker compose -f docker-compose.yml -f docker-compose.gpu.yml up` (requer NVIDIA Container Toolkit, não instalado aqui).
+
+## Arquitetura da fundação
+
+- `create_app(settings)` em `src/chatbot_api/main.py` monta tudo; testes injetam `Settings` (ver `tests/conftest.py`) e nunca leem o `.env`.
+- Middlewares são **ASGI puros** (`core/logging.py`, `core/rate_limit.py`) para não bufferizar o streaming SSE — não use `BaseHTTPMiddleware` nem slowapi (ver ADR-0001).
+- Todo erro sai no formato da OpenAI via `core/errors.py`; levante `ApiError` em vez de `HTTPException`.
+- Auth: dependências `require_access_token` / `require_admin_token` (`core/security.py`).
+- Rate limit global por IP; atrás de proxy, `TRUSTED_PROXY_HOPS` define qual entrada do `X-Forwarded-For` é confiável.
+- `/ready` executa as funções em `app.state.readiness_checks` — novas dependências (banco, provedor) registram seu check ali.
 
 Stack (versões sempre pinadas, nunca `latest`): Python 3.14.x, uv 0.13.x, FastAPI 0.162.x (com docs automáticas), SDK `openai`, LangGraph 1.2.x, PostgreSQL + pgvector.
 
-**O desenvolvimento segue `docs/planejamento/PLANO_DE_DESENVOLVIMENTO.md` (1 PR por fase, usando `.github/pull_request_template.md`). Decisões de base na `docs/RFC/RFC-0002.md` — consulte antes de propor algo que as contradiga.** O workflow `Security` está desativado no GitHub até a Fase 8.
+**O desenvolvimento segue `docs/planejamento/PLANO_DE_DESENVOLVIMENTO.md` (1 PR por fase, usando `.github/pull_request_template.md`). Decisões de base na `docs/RFC/RFC-0002.md` — consulte antes de propor algo que as contradiga.** O workflow `Security` está desativado no GitHub até a Fase 8; o `CI` (lint, tipos, testes) roda em todo PR.
 
 ## Objetivo e arquitetura
 
