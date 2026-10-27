@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from chatbot_api.core.errors import ApiError
-from chatbot_api.providers.profile import build_provider_profile
+from chatbot_api.providers.profile import FALLBACK_MIN_SCORE, build_provider_profile
 from tests.conftest import SettingsFactory
 
 PRODUCTION_PROVIDER = {
@@ -56,3 +56,18 @@ def test_rejects_unknown_model(settings_factory: SettingsFactory) -> None:
 
     assert error.value.status_code == HTTPStatus.NOT_FOUND
     assert error.value.code == "model_not_found"
+
+
+def test_min_score_is_calibrated_per_embedding_model(settings_factory: SettingsFactory) -> None:
+    assert build_provider_profile(settings_factory()).min_score == 0.47
+    assert build_provider_profile(settings_factory(**PRODUCTION_PROVIDER)).min_score == 0.27
+
+
+def test_unknown_embedding_model_uses_fallback(settings_factory: SettingsFactory) -> None:
+    settings = settings_factory(ollama_embeddings_models="nomic-embed-text")
+
+    assert build_provider_profile(settings).min_score == FALLBACK_MIN_SCORE
+
+
+def test_explicit_min_score_overrides_calibration(settings_factory: SettingsFactory) -> None:
+    assert build_provider_profile(settings_factory(rag_min_score=0.6)).min_score == 0.6

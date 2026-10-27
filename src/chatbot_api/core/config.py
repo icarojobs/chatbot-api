@@ -51,7 +51,7 @@ class Settings(BaseSettings):
 
     rag_top_k_default: int = Field(default=4, ge=1)
     rag_top_k_max: int = Field(default=8, ge=1)
-    rag_min_score: float = Field(default=0.47, ge=0, le=1)
+    rag_min_score: float | None = Field(default=None, ge=0, le=1)
     rag_context_max_chars: int = Field(default=18000, gt=0)
 
     upload_max_bytes: int = Field(default=50 * 1024 * 1024, gt=0)

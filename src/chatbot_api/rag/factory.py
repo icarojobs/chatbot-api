@@ -11,9 +11,10 @@ def build_rag_service(
     chat: ChatModelProvider,
     session_factory: SessionFactory,
     settings: Settings,
+    min_score: float,
 ) -> RAGService:
     rag_settings = RAGSettings(
-        min_score=settings.rag_min_score,
+        min_score=min_score,
         context_max_chars=settings.rag_context_max_chars,
         max_output_tokens=settings.llm_max_output_tokens,
     )
