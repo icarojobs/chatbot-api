@@ -1,7 +1,7 @@
 import uuid
 from collections.abc import Iterable, Sequence
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from chatbot_api.db.models import Chunk, ChunkEmbedding, Document, DocumentStatus
@@ -19,6 +19,20 @@ class DocumentRepository:
 
     async def get(self, document_id: uuid.UUID) -> Document | None:
         return await self._session.get(Document, document_id)
+
+    async def list_with_chunk_counts(
+        self, document_id: uuid.UUID | None = None
+    ) -> list[tuple[Document, int]]:
+        statement = (
+            select(Document, func.count(Chunk.id))
+            .outerjoin(Chunk, Chunk.document_id == Document.id)
+            .group_by(Document.id)
+            .order_by(Document.created_at)
+        )
+        if document_id is not None:
+            statement = statement.where(Document.id == document_id)
+        rows = await self._session.execute(statement)
+        return [(document, count) for document, count in rows]
 
     def add(
         self, filename: str, content_hash: str, page_count: int, drafts: Sequence[ChunkDraft]

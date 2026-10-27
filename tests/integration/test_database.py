@@ -1,12 +1,14 @@
+from collections.abc import Callable
 from http import HTTPStatus
 
 import pytest
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.pool import NullPool
 
+from chatbot_api.core.config import Settings
 from chatbot_api.db import migrate
-from chatbot_api.main import create_app
 from tests.conftest import TEST_BASE_URL, TEST_DATABASE_URL, SettingsFactory
 
 
@@ -29,8 +31,10 @@ async def test_ready_when_database_is_reachable(client: AsyncClient) -> None:
     assert response.status_code == HTTPStatus.OK
 
 
-async def test_not_ready_when_database_is_unreachable(settings_factory: SettingsFactory) -> None:
-    app = create_app(
+async def test_not_ready_when_database_is_unreachable(
+    settings_factory: SettingsFactory, app_factory: Callable[[Settings], FastAPI]
+) -> None:
+    app = app_factory(
         settings_factory(database_url="postgresql+psycopg://user:pass@127.0.0.1:1/none")
     )
     transport = ASGITransport(app=app)

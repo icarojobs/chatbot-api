@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from chatbot_api.api.routes import health, models
+from chatbot_api.api.routes import documents, health, models
 from chatbot_api.core.config import Settings, get_settings
 from chatbot_api.core.errors import register_error_handlers
 from chatbot_api.core.logging import RequestContextMiddleware, configure_logging
@@ -47,6 +47,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = resolved_settings
     app.state.provider_profile = profile
+    app.state.engine = engine
     app.state.session_factory = create_session_factory(engine)
     app.state.readiness_checks = [database_readiness_check(engine)]
 
@@ -59,4 +60,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(RequestContextMiddleware)
     app.include_router(health.router)
     app.include_router(models.router)
+    app.include_router(documents.router)
     return app
