@@ -253,6 +253,20 @@ Responde perguntas **com base nas apostilas**, no mesmo formato da API de Chat C
 
 Campos desconhecidos são ignorados; `tools`, `functions`, `tool_choice`, `function_call`, `logprobs` e `n > 1` retornam `400`.
 
+#### Proteção contra prompt injection
+
+Pergunta e instruções `system`/`developer` passam por um filtro antes de qualquer chamada ao modelo. O filtro procura tentativas de:
+- anular as regras ("ignore as instruções anteriores");
+- extrair o prompt;
+- trocar a persona do assistente (jailbreak);
+- fazer executar conteúdo codificado.
+
+Quando detecta uma delas, a API responde **`200`** com a mensagem fixa abaixo, `abstained: true` e `sources: []`, sem chamar o LLM:
+
+> Não posso atender a esse pedido: a mensagem contém instruções para alterar o funcionamento do assistente. Faça uma pergunta sobre o conteúdo das apostilas de saúde mental.
+
+Trechos de PDF com instruções embutidas são descartados do contexto. Detalhes e resultados medidos estão no [ADR-0008](../ADR/ADR-0008.md).
+
 #### Papéis (`role`) das mensagens
 
 | `role` | Uso nesta API |
