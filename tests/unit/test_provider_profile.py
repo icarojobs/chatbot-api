@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from chatbot_api.core.errors import ApiError
-from chatbot_api.providers.profile import FALLBACK_MIN_SCORE, build_provider_profile
+from chatbot_api.providers.profile import FALLBACK_MIN_SCORE, ModelType, build_provider_profile
 from tests.conftest import SettingsFactory
 
 PRODUCTION_PROVIDER = {
@@ -56,6 +56,26 @@ def test_rejects_unknown_model(settings_factory: SettingsFactory) -> None:
 
     assert error.value.status_code == HTTPStatus.NOT_FOUND
     assert error.value.code == "model_not_found"
+
+
+def test_rejects_embedding_model_for_chat(settings_factory: SettingsFactory) -> None:
+    profile = build_provider_profile(settings_factory(**PRODUCTION_PROVIDER))
+
+    with pytest.raises(ApiError) as error:
+        profile.resolve_chat_model("cohere/embed-v4.0")
+
+    assert error.value.status_code == HTTPStatus.BAD_REQUEST
+    assert error.value.code == "invalid_model_type"
+
+
+def test_models_are_typed_by_purpose(settings_factory: SettingsFactory) -> None:
+    profile = build_provider_profile(settings_factory(**PRODUCTION_PROVIDER))
+
+    assert profile.models == {
+        "azure/gpt-5-mini": ModelType.CHAT,
+        "azure/gpt-6-luna": ModelType.CHAT,
+        "cohere/embed-v4.0": ModelType.EMBEDDING,
+    }
 
 
 def test_min_score_is_calibrated_per_embedding_model(settings_factory: SettingsFactory) -> None:

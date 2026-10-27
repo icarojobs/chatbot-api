@@ -202,6 +202,7 @@ async def test_uses_last_user_message_and_text_parts(
     ("payload", "status", "code"),
     [
         ({"model": "gpt-4o"}, HTTPStatus.NOT_FOUND, "model_not_found"),
+        ({"model": "bge-m3:567m"}, HTTPStatus.BAD_REQUEST, "invalid_model_type"),
         (
             {"messages": [{"role": "assistant", "content": "oi"}]},
             HTTPStatus.BAD_REQUEST,
