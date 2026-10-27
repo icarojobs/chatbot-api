@@ -1,7 +1,8 @@
 import uuid
 from collections.abc import Iterable, Sequence
+from typing import Any, cast
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import CursorResult, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from chatbot_api.db.models import Chunk, ChunkEmbedding, Document, DocumentStatus
@@ -41,8 +42,8 @@ class DocumentRepository:
         return result.first() is not None
 
     async def delete_all(self) -> int:
-        result = await self._session.execute(delete(Document).returning(Document.id))
-        return len(result.all())
+        result = cast(CursorResult[Any], await self._session.execute(delete(Document)))
+        return result.rowcount
 
     def add(
         self, filename: str, content_hash: str, page_count: int, drafts: Sequence[ChunkDraft]

@@ -5,8 +5,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from pathlib import PurePath
+from typing import Any, cast
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import CursorResult, delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -150,9 +151,9 @@ class UploadService:
 
     async def delete_all(self) -> int:
         async with self._session_factory() as session:
-            result = await session.execute(delete(UploadSession).returning(UploadSession.id))
+            result = cast(CursorResult[Any], await session.execute(delete(UploadSession)))
             await session.commit()
-            return len(result.all())
+            return result.rowcount
 
     async def complete(self, upload_id: uuid.UUID, ingestion: IngestionService) -> uuid.UUID:
         async with self._session_factory() as session:
