@@ -187,13 +187,26 @@ O último chunk traz os campos extras `sources` (arquivo, páginas e score de ca
 
 ---
 
+### Alternar entre desenvolvimento e produção (local)
+
+No Docker, quem escolhe o ambiente é o `make`, não o `API_ENV` do `.env`. O container ignora esse valor para evitar uma combinação inválida: modelos de produção com o banco que só tem embeddings de desenvolvimento, o que faria toda pergunta cair em abstenção.
+
+| Comando | Modelos | Banco local | Observação |
+|---|---|---|---|
+| `make up` | Ollama (`qwen3` + `bge-m3`) | `POSTGRES_DB` (ex.: `chatbot`) | Padrão, sem custo |
+| `make up-prod` | Provedor real (`OPENAI_*` do `.env`) | `chatbot_prod`, criado se não existir | **Gasta créditos** a cada pergunta |
+
+- **Primeira vez em produção local:** rode `make ingest-prod-local` para gerar os embeddings de produção no banco `chatbot_prod`. Isso **gasta créditos**; a base atual usa cerca de 55 mil tokens.
+- **Troca de ambiente:** basta rodar o outro comando. Só o container da API é recriado (em segundos), e os dois bancos coexistem.
+- **Por que não basta `restart`:** o `docker compose restart` não relê o `.env`; o container precisa ser recriado.
+
 ## Configuração
 
 Todas as variáveis estão documentadas no [`.env.example`](.env.example). As principais:
 
 | Variável | Descrição |
 |---|---|
-| `API_ENV` | `development` (Ollama, padrão) ou `production` (provedor real) |
+| `API_ENV` | `development` (Ollama, padrão) ou `production` (provedor real). Vale para `make run`/CLI no host; no Docker, use `make up` / `make up-prod` |
 | `API_ACCESS_TOKEN` / `API_ADMIN_TOKEN` | Tokens Bearer (mín. 32 caracteres) de consumo e de administração |
 | `DATABASE_URL` | PostgreSQL com pgvector (`postgresql+psycopg://…`) |
 | `OPENAI_BASE_URL`, `OPENAI_ACCESS_KEY` | Endpoint e chave do provedor de produção (nunca versionados) |

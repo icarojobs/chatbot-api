@@ -1,10 +1,10 @@
 .DEFAULT_GOAL := help
-.PHONY: help sync install run test lint format typecheck check up down logs deploy ingest-prod evaluate ingest
+.PHONY: help sync install run test lint format typecheck check up up-prod down logs deploy ingest-prod evaluate ingest ingest-prod-local
 
 MERGED_PR_LIMIT := 200
 
 help: ## Lista os comandos disponíveis
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
 
 sync: ## Atualiza a main e remove branches locais de PRs já mergeados
 	git fetch --prune
@@ -35,8 +35,17 @@ typecheck: ## Verifica tipos com mypy (strict)
 
 check: lint typecheck test ## Lint + tipos + testes (o mesmo que a CI)
 
-up: ## Sobe API, Postgres e Ollama via Docker
+PROD_LOCAL_DATABASE := chatbot_prod
+PROD_LOCAL_ENV := DOCKER_API_ENV=production DOCKER_API_DATABASE=$(PROD_LOCAL_DATABASE)
+INGEST_IN_CONTAINER := docker compose run --rm -v "$(CURDIR)/docs/apostilas:/apostilas:ro" api python -m chatbot_api.ingest /apostilas
+
+up: ## Sobe API (desenvolvimento: Ollama), Postgres e Ollama via Docker
 	docker compose up -d --build
+
+up-prod: ## Sobe a API local com o provedor real e o banco chatbot_prod (embeddings de produção)
+	docker compose up -d --wait postgres
+	docker compose exec -T postgres sh -c 'psql -U "$$POSTGRES_USER" -d postgres -Atc "SELECT 1 FROM pg_database WHERE datname = '"'"'$(PROD_LOCAL_DATABASE)'"'"'" | grep -q 1 || createdb -U "$$POSTGRES_USER" $(PROD_LOCAL_DATABASE)'
+	$(PROD_LOCAL_ENV) docker compose up -d --build api
 
 down: ## Derruba os containers
 	docker compose down
@@ -45,7 +54,10 @@ logs: ## Acompanha os logs da API
 	docker compose logs -f api
 
 ingest: ## Ingere docs/apostilas pelo container (sem uv no host)
-	docker compose run --rm -v "$(CURDIR)/docs/apostilas:/apostilas:ro" api python -m chatbot_api.ingest /apostilas
+	$(INGEST_IN_CONTAINER)
+
+ingest-prod-local: ## Ingere docs/apostilas no banco chatbot_prod com o embedding de produção (gasta créditos)
+	$(PROD_LOCAL_ENV) $(INGEST_IN_CONTAINER)
 
 ENV_PRODUCTION := .env.production
 
