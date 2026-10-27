@@ -213,3 +213,18 @@ Em desenvolvimento, sem GPU, a execução completa leva cerca de 2 a 3 minutos p
 Para testar **localmente com os modelos de produção**, rode `make up-prod`; para voltar ao desenvolvimento, `make up`. Mudar `API_ENV` no `.env` não afeta o container. Veja a seção "Alternar entre desenvolvimento e produção (local)" do README. A `baseUrl` e os tokens continuam os mesmos. Rode **Listar modelos** de novo: se `model` guardar um modelo que não existe no ambiente atual, ela é trocada pelo primeiro modelo `chat`.
 
 Para apontar para produção (Cloud Run), troque `baseUrl` pela URL do serviço e use os tokens de **produção** em `accessToken`/`adminToken`. Em produção, `Listar modelos` retorna os modelos de `OPENAI_RESPONSE_MODELS`. Atualize `model` com o modelo desejado, ou deixe vazio para usar o padrão.
+
+## 11. Testar o streaming pelo navegador (sem Postman)
+
+A página [`docs/postman/test-stream.html`](../postman/test-stream.html) chama `POST /v1/chat/completions` direto do navegador. Ela mostra se a resposta chega aos poucos (`stream=true`) ou de uma vez (`stream=false`).
+
+1. Abra o arquivo direto do disco, por exemplo `file:///caminho/do/projeto/docs/postman/test-stream.html`. Não é preciso servidor.
+2. Preencha os campos:
+   - **CHATBOT API URL:** o padrão é `http://localhost:8000/v1/chat/completions`. Para produção, use a URL do Cloud Run seguida de `/v1/chat/completions`.
+   - **Chave API:** o `API_ACCESS_TOKEN` ou o `API_ADMIN_TOKEN` do ambiente.
+   - **Mensagem:** a pergunta.
+3. Marque ou desmarque **Stream** e clique em **Enviar**.
+
+O painel mostra o status HTTP, o tempo até o primeiro byte, a quantidade de chunks, o tempo total, `abstained`, as fontes e, em **Resposta bruta**, o SSE recebido. No streaming, o número de chunks deve subir aos poucos. O botão **Parar** cancela a requisição.
+
+A página depende do CORS da API (`CORS_ALLOWED_ORIGINS`, padrão `*`). Se aparecer "Failed to fetch", confira se a API no ar já tem CORS: o container local precisa ter sido reconstruído (`make up`), e a produção, publicada com `make deploy`. Só a URL fica salva no navegador; o token nunca é guardado.

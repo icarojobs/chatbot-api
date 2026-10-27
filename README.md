@@ -186,7 +186,7 @@ for chunk in stream:
         print(chunk.choices[0].delta.content, end="", flush=True)
 ```
 
-O último chunk traz os campos extras `sources` (arquivo, páginas e score de cada trecho citado) e `abstained`. Manual completo, com upload e erros: [docs/manuais/MANUAL_DA_API.md](docs/manuais/MANUAL_DA_API.md). Para testar pelo Postman, importe [docs/postman/chatbot-api.postman_collection.json](docs/postman/chatbot-api.postman_collection.json) e siga [docs/manuais/TESTE_COM_POSTMAN.md](docs/manuais/TESTE_COM_POSTMAN.md).
+O último chunk traz os campos extras `sources` (arquivo, páginas e score de cada trecho citado) e `abstained`. Manual completo, com upload e erros: [docs/manuais/MANUAL_DA_API.md](docs/manuais/MANUAL_DA_API.md). Para testar pelo Postman, importe [docs/postman/chatbot-api.postman_collection.json](docs/postman/chatbot-api.postman_collection.json) e siga [docs/manuais/TESTE_COM_POSTMAN.md](docs/manuais/TESTE_COM_POSTMAN.md). Para ver o streaming no navegador, abra [docs/postman/test-stream.html](docs/postman/test-stream.html).
 
 ---
 
