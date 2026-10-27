@@ -15,6 +15,7 @@ STREAM_TEXT_KEY = "text"
 
 class RAGState(TypedDict, total=False):
     question: str
+    instructions: str
     model: str
     top_k: int
     query_embedding: list[float]
@@ -70,7 +71,9 @@ class RAGNodes:
         parts: list[str] = []
         stream = self._chat.stream_chat(
             model=state["model"],
-            messages=build_messages(state["question"], state["context"]),
+            messages=build_messages(
+                state["question"], state["context"], state.get("instructions", "")
+            ),
             max_output_tokens=self._settings.max_output_tokens,
         )
         async for text in stream:
