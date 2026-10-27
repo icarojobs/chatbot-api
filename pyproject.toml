@@ -16,7 +16,7 @@ dependencies = [
     "psycopg[binary]==3.3.6",
     "pgvector==0.5.1",
     "alembic==1.20.0",
-    "pypdf==6.21.1",
+    "pypdf==6.21.3",
     "langgraph==1.2.16",
 ]
 
@@ -36,10 +36,10 @@ build-backend = "uv_build"
 
 [tool.uv]
 required-version = "==0.13.6"
-# Supply-chain cooldown: only resolve releases older than 7 days. FastAPI 0.162.x is required
-# by the README and its first release is newer than that, so it is the documented exception.
+# Supply-chain cooldown: only resolve releases older than 7 days. Exceptions: FastAPI 0.162.x is
+# required by the README; pypdf parses untrusted uploads and 6.21.1 has HIGH CVEs fixed in 6.21.2.
 exclude-newer = "7 days"
-exclude-newer-package = { fastapi = false }
+exclude-newer-package = { fastapi = false, pypdf = false }
 
 [tool.ruff]
 line-length = 100
