@@ -25,6 +25,21 @@ Materiais/apostilas exemplos RAG:
 
 ---
 
+## SEGURANÇA (CI)
+Todo PR, push na `main` e uma varredura semanal executam o workflow `.github/workflows/security.yml`, que bloqueia o merge em achados HIGH/CRITICAL:
+
+| Ferramenta | Cobertura |
+|---|---|
+| CodeQL | SAST Python |
+| Semgrep | SAST, SQL injection, OWASP Top 10 |
+| pip-audit | CVEs nas dependências (com correção disponível) |
+| Gitleaks | Segredos no histórico git |
+| Trivy | CVEs e misconfigurações (Dockerfile/IaC) |
+
+Os relatórios completos ficam em **Security → Code scanning**. Decisões detalhadas em [RFC-0001](docs/RFC/RFC-0001.md).
+
+---
+
 ## TECH STACK
 - Python 3.15.x
 - uv 0.13.x
