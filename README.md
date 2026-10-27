@@ -62,14 +62,16 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    Start([pergunta]) --> V[validate_input]
-    V --> E[embed_question]
+    Start([pergunta + instruções do cliente]) --> V{validate_input<br/>prompt injection?}
+    V -->|sim| X[refuse<br/>sem chamar o LLM]
+    V -->|não| E[embed_question]
     E --> R[retrieve_context<br/>top-k por cosseno]
     R --> C{evaluate_context<br/>algum trecho ≥ limiar?}
     C -->|sim| G[generate_answer<br/>stream de tokens + citações]
     C -->|não| A[abstain<br/>sem chamar o LLM]
     G --> S([SSE: chunks OpenAI + sources + DONE])
     A --> S
+    X --> S
 ```
 
 ### Ingestão de documentos
@@ -227,12 +229,25 @@ Segredos ficam apenas no `.env` (local) ou no Secret Manager (produção).
 make install   # uv sync (Python 3.14 + dependências fixadas no uv.lock)
 make check     # ruff + mypy strict + pytest (cobertura mínima de 95%)
 make evaluate  # avaliação do retrieval
+make redteam   # 16 ataques de prompt injection contra os modelos do ambiente (make up / make up-prod)
 ```
 
-- **147 testes, 100% de cobertura**, com warnings tratados como erro. Testes de integração usam PostgreSQL real; nenhum teste chama provedores reais.
+- **206 testes, 100% de cobertura**, com warnings tratados como erro. Testes de integração usam PostgreSQL real; nenhum teste chama provedores reais.
 - O endpoint de chat é testado com o **SDK oficial da OpenAI** contra a API.
 - **CI** (`ci.yml`): lint, tipos e testes com Postgres em todo PR.
 - **Security** (`security.yml`): CodeQL, Semgrep, pip-audit, Gitleaks e Trivy bloqueiam o merge em achados HIGH/CRITICAL ([RFC-0001](docs/RFC/RFC-0001.md)).
+- **Prompt injection** ([ADR-0008](docs/ADR/ADR-0008.md)), defesa em camadas:
+  - filtro determinístico que recusa sem chamar o LLM;
+  - descarte de trechos de PDF envenenados;
+  - blocos delimitados e higienizados;
+  - prompt com regras fixas.
+
+  Medido com `make redteam`:
+
+  | Ambiente | Antes | Depois |
+  |---|---|---|
+  | dev (`qwen3:4b`) | 8/13 | 15/16 |
+  | prod (`gpt-5-mini`) | — | 16/16 |
 - Controles da aplicação: tokens comparados em tempo constante, rate limit em todas as rotas (IP real atrás do proxy), allowlist de modelos, erros sem detalhes internos, contexto tratado como dado não confiável no prompt, uploads validados por SHA-256 e magic bytes, container sem root e segredos fora do repositório.
 
 ---
@@ -264,6 +279,7 @@ Ponta a ponta em produção (`gpt-5-mini`): respostas com citações corretas em
 | LangGraph com abstenção determinística | Responder/abster explícito e testável; abstenção sem custo de LLM | [ADR-0004](docs/ADR/ADR-0004.md) |
 | Limiar calibrado por modelo de embedding | Com o limiar do dev, produção teria 30% de abstenções indevidas | [ADR-0006](docs/ADR/ADR-0006.md) |
 | `system`/`developer` como instruções do cliente | Compatível com a OpenAI (tom, formato, idioma) sem burlar as regras do RAG; resposta no idioma da pergunta | [ADR-0007](docs/ADR/ADR-0007.md) |
+| Defesa em camadas contra prompt injection + red team | O prompt sozinho bloqueava 8/13 ataques no modelo de dev; com as camadas determinísticas, 15/16 (dev) e 16/16 (prod) | [ADR-0008](docs/ADR/ADR-0008.md) |
 | Upload em partes de 4 MiB no Postgres | Funciona em qualquer hospedagem, retomável e multi-instância | [Fase 4](docs/planejamento/PLANO_DE_DESENVOLVIMENTO.md) |
 | Rate limit e logs em middlewares ASGI próprios | A slowapi não aplicava o limite e quebraria o streaming SSE | [ADR-0001](docs/ADR/ADR-0001.md) |
 | Cloud Run + Neon | SSE, 32 MiB por requisição, sem cold start na avaliação | [ADR-0005](docs/ADR/ADR-0005.md) |
@@ -275,6 +291,7 @@ O desenvolvimento seguiu o [plano por fases](docs/planejamento/PLANO_DE_DESENVOL
 ## Limitações e próximos passos
 
 - **Histórico de conversa** não é usado na busca (apenas a última pergunta).
+- **Prompt injection**: o filtro é baseado em padrões e o modelo de dev (4B) ainda obedece a ordens disfarçadas. Em produção, os 16 ataques foram bloqueados, mas nenhuma defesa é absoluta. Rode `make redteam` a cada troca de modelo ou de prompt.
 - **Recall de 90%**: termos raros com uma única ocorrência (ex.: "redução de danos") podem ficar fora do top-4 → busca híbrida (BM25 + RRF) se a base crescer.
 - **Rate limit por instância** (memória); Redis se houver várias instâncias sob carga.
 - **Ingestão em background no processo**: um restart durante os embeddings exige reenviar o documento (a ingestão retoma de onde parou).
