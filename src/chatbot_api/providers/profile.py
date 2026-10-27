@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from enum import StrEnum
 from http import HTTPStatus
 
 from pydantic import SecretStr
@@ -13,6 +14,15 @@ FALLBACK_MIN_SCORE = 0.3
 
 MODEL_NOT_FOUND_MESSAGE = "O modelo '{model}' não existe ou não está disponível."
 MODEL_NOT_FOUND_CODE = "model_not_found"
+NOT_A_CHAT_MODEL_MESSAGE = (
+    "O modelo '{model}' é de embedding e não gera respostas; use um modelo do tipo chat."
+)
+NOT_A_CHAT_MODEL_CODE = "invalid_model_type"
+
+
+class ModelType(StrEnum):
+    CHAT = "chat"
+    EMBEDDING = "embedding"
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,17 +37,35 @@ class ProviderProfile:
     def default_chat_model(self) -> str:
         return self.chat_models[0]
 
+    @property
+    def models(self) -> dict[str, ModelType]:
+        return {
+            **dict.fromkeys(self.chat_models, ModelType.CHAT),
+            self.embedding_model: ModelType.EMBEDDING,
+        }
+
+    def model_type(self, model: str) -> ModelType:
+        model_type = self.models.get(model)
+        if model_type is None:
+            raise ApiError(
+                HTTPStatus.NOT_FOUND,
+                MODEL_NOT_FOUND_MESSAGE.format(model=model),
+                ErrorType.NOT_FOUND,
+                MODEL_NOT_FOUND_CODE,
+            )
+        return model_type
+
     def resolve_chat_model(self, requested: str | None) -> str:
         if requested is None:
             return self.default_chat_model
-        if requested in self.chat_models:
-            return requested
-        raise ApiError(
-            HTTPStatus.NOT_FOUND,
-            MODEL_NOT_FOUND_MESSAGE.format(model=requested),
-            ErrorType.NOT_FOUND,
-            MODEL_NOT_FOUND_CODE,
-        )
+        if self.model_type(requested) is not ModelType.CHAT:
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                NOT_A_CHAT_MODEL_MESSAGE.format(model=requested),
+                ErrorType.INVALID_REQUEST,
+                NOT_A_CHAT_MODEL_CODE,
+            )
+        return requested
 
 
 def resolve_min_score(settings: Settings, embedding_model: str) -> float:

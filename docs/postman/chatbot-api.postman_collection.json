@@ -119,7 +119,7 @@
                 "models"
               ]
             },
-            "description": "Lista os modelos disponíveis. O primeiro é gravado na variável `model` (se ela estiver vazia) e usado nas requisições de chat."
+            "description": "Lista os modelos do ambiente com o campo `type`: `chat` (gera as respostas; use em `model`) ou `embedding` (busca do RAG, uso interno). O primeiro modelo `chat` é gravado na variável `model` se ela estiver vazia ou guardar um modelo que não existe neste ambiente."
           },
           "event": [
             {
@@ -129,11 +129,13 @@
                 "exec": [
                   "pm.test('Status 200', () => pm.response.to.have.status(200));",
                   "const models = pm.response.json().data;",
-                  "pm.test('Há ao menos um modelo', () => pm.expect(models.length).to.be.above(0));",
-                  "if (models.length && !pm.collectionVariables.get('model')) {",
-                  "    pm.collectionVariables.set('model', models[0].id);",
+                  "const chatModels = models.filter(m => m.type === 'chat').map(m => m.id);",
+                  "pm.test('Há ao menos um modelo de chat', () => pm.expect(chatModels.length).to.be.above(0));",
+                  "pm.test('Todo modelo tem type', () => models.forEach(m => pm.expect(['chat', 'embedding']).to.include(m.type)));",
+                  "if (chatModels.length && !chatModels.includes(pm.collectionVariables.get('model'))) {",
+                  "    pm.collectionVariables.set('model', chatModels[0]);",
                   "}",
-                  "console.log('Modelos disponíveis:', models.map(m => m.id));"
+                  "console.log('Chat:', chatModels, '| Embedding:', models.filter(m => m.type === 'embedding').map(m => m.id));"
                 ]
               }
             }
@@ -155,7 +157,7 @@
                 "{{model}}"
               ]
             },
-            "description": "Detalha o modelo da variável `model`. IDs com `/` (ex.: `azure/gpt-5-mini`) funcionam sem codificação."
+            "description": "Detalha o modelo da variável `model`, incluindo o `type`. IDs com `/` (ex.: `azure/gpt-5-mini`) funcionam sem codificação."
           },
           "event": [
             {
@@ -163,7 +165,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Modelo de chat', () => pm.expect(pm.response.json().type).to.eql('chat'));"
                 ]
               }
             }
@@ -732,6 +735,70 @@
                   "    const body = pm.response.json();",
                   "    pm.expect(body.error).to.be.an('object');",
                   "    pm.expect(body.error.code).to.eql(\"model_not_found\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Modelo de embedding no chat (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/chat/completions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "chat",
+                "completions"
+              ]
+            },
+            "description": "Modelos com `type: embedding` servem à busca do RAG e não geram respostas. O pre-request script pega o modelo de embedding do ambiente em `/v1/models`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"{{embeddingModel}}\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Olá\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest({",
+                  "    url: pm.variables.replaceIn('{{baseUrl}}/v1/models'),",
+                  "    header: { Authorization: 'Bearer ' + pm.variables.get('accessToken') },",
+                  "}, (err, res) => {",
+                  "    const embedding = res.json().data.find(m => m.type === 'embedding');",
+                  "    pm.variables.set('embeddingModel', embedding.id);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Erro no formato da OpenAI', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.error).to.be.an('object');",
+                  "    pm.expect(body.error.code).to.eql(\"invalid_model_type\");",
                   "});"
                 ]
               }
