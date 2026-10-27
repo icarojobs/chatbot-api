@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     provider_max_retries: int = Field(default=1, ge=0)
     llm_max_output_tokens: int = Field(default=1500, gt=0)
 
+    rag_top_k_default: int = Field(default=4, ge=1)
+    rag_top_k_max: int = Field(default=8, ge=1)
+    rag_min_score: float = Field(default=0.47, ge=0, le=1)
+    rag_context_max_chars: int = Field(default=18000, gt=0)
+
     upload_max_bytes: int = Field(default=50 * 1024 * 1024, gt=0)
     upload_ttl_minutes: int = Field(default=60, gt=0)
 
