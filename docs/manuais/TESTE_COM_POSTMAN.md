@@ -181,4 +181,6 @@ Em desenvolvimento, sem GPU, a execução completa leva cerca de 2 a 3 minutos p
 
 ## 9. Testar outro ambiente
 
+Para testar **localmente com os modelos de produção**, rode `make up-prod`; para voltar ao desenvolvimento, `make up`. Mudar `API_ENV` no `.env` não afeta o container. Veja a seção "Alternar entre desenvolvimento e produção (local)" do README. A `baseUrl` e os tokens continuam os mesmos. Rode **Listar modelos** de novo: se `model` ainda guardar o modelo do outro ambiente, apague o valor antes, porque a requisição só a preenche quando está vazia.
+
 Para apontar para produção (Cloud Run), troque `baseUrl` pela URL do serviço e use os tokens de **produção** em `accessToken`/`adminToken`. Em produção, `Listar modelos` retorna os modelos de `OPENAI_RESPONSE_MODELS`. Atualize `model` com o modelo desejado, ou deixe vazio para usar o padrão.

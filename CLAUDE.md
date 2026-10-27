@@ -14,6 +14,8 @@ make evaluate    # avaliação do retrieval (Hit@k, MRR, abstenção) e limiar s
 make deploy      # Cloud Run (gcloud autenticado + .env.production; ver docs/hospedagem/DEPLOY.md)
 make ingest-prod # ingere docs/apostilas no Neon com o embedding de produção
 make up / down   # docker compose: api, postgres (pgvector) e ollama (+ ollama-models baixa os modelos de dev)
+make up-prod     # API local em API_ENV=production (provedor real, banco chatbot_prod); make up volta ao dev
+make ingest-prod-local  # embeddings de produção no banco chatbot_prod (gasta créditos)
 uv run pytest tests/integration/test_health.py::test_health_is_ok   # um teste específico
 uv run python -m chatbot_api.ingest docs/apostilas                  # ingere PDFs (idempotente)
 uv run python -m chatbot_api.db.migrate                             # aplica migrations (o container já roda no start)
