@@ -26,7 +26,7 @@ Materiais/apostilas exemplos RAG:
 ---
 
 ## SEGURANÇA (CI)
-Todo PR, push na `main` e uma varredura semanal executam o workflow `.github/workflows/security.yml`, que bloqueia o merge em achados HIGH/CRITICAL:
+O workflow `.github/workflows/security.yml` bloqueia o merge em achados HIGH/CRITICAL (em PR, push na `main` e varredura semanal). **Está desativado durante o desenvolvimento** para acelerar as entregas e será reativado na fase final (`gh workflow enable Security`).
 
 | Ferramenta | Cobertura |
 |---|---|
@@ -41,8 +41,15 @@ Os relatórios completos ficam em **Security → Code scanning**. Decisões deta
 ---
 
 ## TECH STACK
-- Python 3.15.x
+- Python 3.14.x
 - uv 0.13.x
 - FastAPI 0.162.x + auto-api-docs
 - openai (python library/sdk)
 - langgraph 1.2.x
+- PostgreSQL + pgvector
+- Ollama (ambiente de desenvolvimento: `qwen3:4b` + `bge-m3`)
+
+---
+
+## PLANEJAMENTO
+O desenvolvimento segue o [plano por fases](docs/planejamento/PLANO_DE_DESENVOLVIMENTO.md), com um PR por fase. As decisões de base estão na [RFC-0002](docs/RFC/RFC-0002.md).

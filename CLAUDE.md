@@ -6,26 +6,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 O repositório ainda está na fase de definição: há apenas documentação (`README.md`, `docs/`), sem código, `pyproject.toml`, testes ou Makefile. Os comandos de build/lint/teste ainda não existem — ao criá-los, atualize esta seção. O atalho `make sync` citado nas regras abaixo também precisa ser criado.
 
-Stack prevista (versões sempre pinadas, nunca `latest`): Python 3.15.x, uv 0.13.x, FastAPI 0.162.x (com docs automáticas), SDK `openai`, LangGraph 1.2.x.
+Stack (versões sempre pinadas, nunca `latest`): Python 3.14.x, uv 0.13.x, FastAPI 0.162.x (com docs automáticas), SDK `openai`, LangGraph 1.2.x, PostgreSQL + pgvector.
+
+**O desenvolvimento segue `docs/planejamento/PLANO_DE_DESENVOLVIMENTO.md` (1 PR por fase, usando `.github/pull_request_template.md`). Decisões de base na `docs/RFC/RFC-0002.md` — consulte antes de propor algo que as contradiga.** O workflow `Security` está desativado no GitHub até a Fase 8.
 
 ## Objetivo e arquitetura
 
 API de chatbot com RAG sobre uma base de conhecimento prévia (apostilas de saúde mental em `docs/apostilas/*.pdf`, ignoradas pelo git). Requisitos centrais:
 
-- Ingestão de documentos via API (PDFs > 16 MB → upload em chunks, para funcionar em qualquer hospedagem; ver `docs/hospedagem/DECISAO_TECNICA.md`).
-- Recuperação dos trechos relevantes → contexto para o LLM → resposta via streaming (SSE).
-- Escolha do modelo entre os configurados, sem reescrever a integração; formato de chamada idêntico ao da API da OpenAI.
+- Ingestão de documentos via API autenticada (upload em partes, para funcionar em qualquer hospedagem; ver `docs/hospedagem/DECISAO_TECNICA.md`) e via CLI, ambas usando o mesmo pipeline.
+- Recuperação dos trechos relevantes (pgvector) → contexto para o LLM → resposta via streaming (SSE).
+- Escolha do modelo entre os configurados, sem reescrever a integração; contrato idêntico ao da OpenAI (`POST /v1/chat/completions`, `GET /v1/models`), com as fontes num campo extra `sources`.
 - Abster-se quando não houver evidência suficiente na base e expor as referências usadas.
 
-Fluxo planejado (LangGraph `StateGraph`): validar entrada → embedding da pergunta → recuperar top-k chunks (índice vetorial local) → avaliar suficiência → gerar resposta em streaming **ou** abster-se → finalizar metadados. O plano detalhado está em `playground/rag-chatbot-architecture.md` (não rastreado, rascunho local). Fora do escopo inicial: microserviços, filas/Redis, multiagentes, memória/checkpoint persistente, banco vetorial gerenciado, reranking antes de medir a qualidade.
+Fluxo planejado (LangGraph `StateGraph`): validar entrada → embedding da pergunta → recuperar top-k chunks (pgvector) → avaliar suficiência → gerar resposta em streaming **ou** abster-se → finalizar metadados. O plano detalhado está em `playground/rag-chatbot-architecture.md` (não rastreado, rascunho local). Fora do escopo inicial: microserviços, filas/Redis, multiagentes, memória/checkpoint persistente, reranking/busca híbrida antes de medir a qualidade. Onde o rascunho diverge da RFC-0002 (SSE próprio, índice local, só CLI), vale a RFC.
 
-Hospedagem alvo: Google Cloud Run (preferido) ou Vercel; Render descartado (filesystem efêmero/suspensão).
+Hospedagem: Google Cloud Run + Neon (Postgres com pgvector); Render descartado (filesystem efêmero/suspensão).
 
 ### Configuração e ambientes
 
 Variáveis em `.env` (não rastreado; exemplo em `.env.example`): `API_ENV`, `OPENAI_BASE_URL`, `OPENAI_ACCESS_KEY`, `OPENAI_RESPONSE_MODELS`, `OPENAI_EMBEDDINGS_MODELS`.
 
-- `API_ENV=development` (padrão): usar Ollama com modelos compatíveis com os do `.env`/README e suportáveis nesta máquina.
+- `API_ENV=development` (padrão): Ollama (via docker compose, GPU GTX 1650 SUPER 4 GB) com `qwen3:4b` (chat) e `bge-m3` (embeddings), pelo mesmo adaptador compatível com OpenAI usado em produção.
+- Embeddings de dev e prod têm modelos/dimensões diferentes e não são comparáveis: os vetores ficam separados por `embedding_model`.
 - `API_ENV=production`: única situação em que o provedor real é chamado.
 - Testes unitários sempre com mocks, usando apenas uma amostra dos modelos configurados.
 - O endpoint é "compatível com OpenAI", mas não presuma que todos os parâmetros do SDK funcionam — valide com uma chamada pequena de embeddings e uma geração curta com streaming antes de processar a base inteira.
