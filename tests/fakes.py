@@ -54,8 +54,9 @@ class FakeChatProvider:
 
 
 class FakeRetriever:
-    def __init__(self, scores: Sequence[float] = (0.9, 0.6)) -> None:
+    def __init__(self, scores: Sequence[float] = (0.9, 0.6), contents: Sequence[str] = ()) -> None:
         self.scores = list(scores)
+        self.contents = list(contents)
         self.calls: list[tuple[str, int]] = []
 
     async def search(
@@ -69,7 +70,7 @@ class FakeRetriever:
                 "apostila.pdf",
                 1,
                 2,
-                f"trecho {index}",
+                self.contents[index] if index < len(self.contents) else f"trecho {index}",
                 score,
             )
             for index, score in enumerate(self.scores)
