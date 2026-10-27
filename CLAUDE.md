@@ -9,6 +9,8 @@ make sync        # rotina de abertura: atualiza a main e remove branches de PRs 
 make install     # uv sync --frozen (Python 3.14 + deps de dev)
 make run         # API local com reload em :8000 (uvicorn --factory chatbot_api.main:create_app)
 make check       # ruff + mypy strict + pytest com --cov-fail-under=95 (o mesmo que a CI)
+make ingest      # ingere docs/apostilas pelo container (sem uv no host)
+make evaluate    # avaliação do retrieval (Hit@k, MRR, abstenção) e limiar sugerido
 make deploy      # Cloud Run (gcloud autenticado + .env.production; ver docs/hospedagem/DEPLOY.md)
 make ingest-prod # ingere docs/apostilas no Neon com o embedding de produção
 make up / down   # docker compose: api, postgres (pgvector) e ollama (+ ollama-models baixa os modelos de dev)
@@ -33,13 +35,13 @@ Portas do host são configuráveis no `.env` (`API_HOST_PORT`, `POSTGRES_HOST_PO
 - Dados (`db/`, ADR-0003): `documents` → `chunks` (com `page_start`/`page_end`) → `chunk_embeddings` (chave `chunk_id` + `embedding_model`, coluna `vector` sem dimensão fixa; sem HNSW de propósito). Ingestão (`ingestion/`): `extract_pages` (pypdf + `normalize_text`, que restaura ligaduras fi/fl perdidas) → `chunk_pages` (frases, ~1500 chars) → `IngestionService` idempotente por SHA-256 e retomável. Mudou normalização/chunking? Os PDFs já ingeridos não são reprocessados — trunque `documents` e reingira.
 - Upload (`uploads/service.py` + `api/routes/documents.py`, token admin): sessão → partes de 4 MiB guardadas em `upload_parts` (bytea, sobrevivem a restart/multi-instância) → `complete` valida SHA-256 e magic bytes, chama `IngestionService.store` e agenda `embed_pending` via `BackgroundTasks`. Nos testes, reduza `PART_SIZE_BYTES` com monkeypatch nos dois módulos.
 - Pytest roda com `filterwarnings = error`: conexões não fechadas quebram a suíte — apps de teste devem vir de `app_factory` (descarta a engine).
-- RAG (`rag/`, ADR-0004): `RAGNodes` (dependências injetadas; `Retriever` é Protocol) → `build_rag_graph` → `RAGService.stream` emite `TextDelta`/`AnswerCompleted(sources, abstained)`. Sem trecho com cosseno ≥ `RAG_MIN_SCORE` ⇒ abstenção sem chamar o LLM. O limiar depende do modelo de embedding (0,47 calibrado para `bge-m3`; produção a calibrar). Script manual de ponta a ponta: `playground/rag_e2e.py`.
+- RAG (`rag/`, ADR-0004): `RAGNodes` (dependências injetadas; `Retriever` é Protocol) → `build_rag_graph` → `RAGService.stream` emite `TextDelta`/`AnswerCompleted(sources, abstained)`. Sem trecho com cosseno ≥ `RAG_MIN_SCORE` ⇒ abstenção sem chamar o LLM. O limiar é calibrado por modelo de embedding em `providers/profile.py::CALIBRATED_MIN_SCORES` (bge-m3 0,47; cohere/embed-v4.0 0,27 — ADR-0006); trocar o modelo de embedding exige reingestão + `make evaluate` + registrar o novo valor. Script manual de ponta a ponta: `playground/rag_e2e.py`.
 - Chat (`api/routes/chat.py`): `POST /v1/chat/completions` no formato OpenAI (stream e não-stream) com extras `sources`/`abstained`. O primeiro evento do RAG é aguardado antes de abrir o stream, para erros iniciais virarem status HTTP; erros depois disso viram `data: {"error": …}` (sem `[DONE]`). `tests/integration/test_chat.py` usa o SDK oficial da OpenAI via `httpx2.ASGITransport`.
 - Provedor real validado (ver ADR-0002): embeddings `cohere/embed-v4.0` com 1536 dimensões; `azure/gpt-5-mini` é modelo de raciocínio — use `max_completion_tokens` com folga (`LLM_MAX_OUTPUT_TOKENS`), senão a resposta sai vazia.
 
 Stack (versões sempre pinadas, nunca `latest`): Python 3.14.x, uv 0.13.x, FastAPI 0.162.x (com docs automáticas), SDK `openai`, LangGraph 1.2.x, PostgreSQL + pgvector.
 
-**O desenvolvimento segue `docs/planejamento/PLANO_DE_DESENVOLVIMENTO.md` (1 PR por fase, usando `.github/pull_request_template.md`). Decisões de base na `docs/RFC/RFC-0002.md` — consulte antes de propor algo que as contradiga.** O workflow `Security` está desativado no GitHub até a Fase 8; o `CI` (lint, tipos, testes) roda em todo PR.
+**O desenvolvimento segue `docs/planejamento/PLANO_DE_DESENVOLVIMENTO.md` (1 PR por fase, usando `.github/pull_request_template.md`). Decisões de base na `docs/RFC/RFC-0002.md` — consulte antes de propor algo que as contradiga.** Todas as fases do plano foram implementadas; os workflows `CI` (lint, tipos, testes) e `Security` (CodeQL, Semgrep, pip-audit, Gitleaks, Trivy) rodam em todo PR.
 
 ## Objetivo e arquitetura
 
