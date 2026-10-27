@@ -47,7 +47,7 @@ Os relatórios completos ficam em **Security → Code scanning**. Decisões deta
 - openai (python library/sdk)
 - langgraph 1.2.x
 - PostgreSQL + pgvector
-- Ollama (ambiente de desenvolvimento: `qwen3:4b` + `bge-m3`)
+- Ollama (ambiente de desenvolvimento: `qwen3:4b-instruct-2507-q4_K_M` + `bge-m3:567m`)
 
 ---
 

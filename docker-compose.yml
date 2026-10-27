@@ -4,6 +4,8 @@ services:
   api:
     build: .
     env_file: .env
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434/v1
     ports:
       - "${API_HOST_PORT:-8000}:8080"
     depends_on:
@@ -45,7 +47,7 @@ services:
     image: ollama/ollama:0.40.11@sha256:dea72d1e22270fe095b68fdf756d2b489d615643c5a2eaebbc5f569181e322d8
     environment:
       OLLAMA_HOST: http://ollama:11434
-    entrypoint: ["sh", "-c", "ollama pull qwen3:4b && ollama pull bge-m3"]
+    entrypoint: ["sh", "-c", "ollama pull qwen3:4b-instruct-2507-q4_K_M && ollama pull bge-m3:567m"]
     depends_on:
       ollama:
         condition: service_healthy

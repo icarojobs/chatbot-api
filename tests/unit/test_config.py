@@ -11,7 +11,15 @@ def test_defaults_to_development(settings: Settings) -> None:
 
 
 def test_production_flag(settings_factory: SettingsFactory) -> None:
-    assert settings_factory(api_env="production").is_production is True
+    settings = settings_factory(
+        api_env="production",
+        openai_base_url="https://provider.test/v1",
+        openai_access_key="key",
+        openai_response_models="m1",
+        openai_embeddings_models="e1",
+    )
+
+    assert settings.is_production is True
 
 
 def test_splits_comma_separated_models(settings_factory: SettingsFactory) -> None:
