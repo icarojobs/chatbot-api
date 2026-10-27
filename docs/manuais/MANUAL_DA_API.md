@@ -65,28 +65,48 @@ curl http://localhost:8000/ready
 
 ### `GET /v1/models`
 
-Lista os modelos de chat disponíveis no ambiente (formato da OpenAI). Requer `API_ACCESS_TOKEN`.
+Lista os modelos do ambiente no formato da OpenAI, com o campo extra **`type`**, que indica a finalidade de cada um. Requer `API_ACCESS_TOKEN`.
+
+| `type` | Finalidade | Pode ser usado em `model` no chat? |
+|---|---|---|
+| `chat` | Gera as respostas a partir dos trechos recuperados | **Sim** (o primeiro da lista é o padrão) |
+| `embedding` | Vetoriza perguntas e documentos para a busca do RAG; é escolhido pelo ambiente, não pelo cliente | Não (`400 invalid_model_type`) |
 
 ```bash
 curl http://localhost:8000/v1/models -H "Authorization: Bearer $API_ACCESS_TOKEN"
 ```
 
 ```json
-{"object": "list", "data": [{"id": "azure/gpt-5-mini", "object": "model", "created": 0, "owned_by": "chatbot-api"}]}
+{
+  "object": "list",
+  "data": [
+    {"id": "azure/gpt-5-mini", "object": "model", "created": 0, "owned_by": "chatbot-api", "type": "chat"},
+    {"id": "azure/gpt-6-luna", "object": "model", "created": 0, "owned_by": "chatbot-api", "type": "chat"},
+    {"id": "cohere/embed-v4.0", "object": "model", "created": 0, "owned_by": "chatbot-api", "type": "embedding"}
+  ]
+}
 ```
 
-Em `development` a lista traz o modelo do Ollama; em `production`, os modelos de `OPENAI_RESPONSE_MODELS`. Com o SDK da OpenAI:
+Os modelos de cada ambiente:
+
+| Ambiente | `chat` | `embedding` |
+|---|---|---|
+| `development` (Ollama) | `qwen3:4b-instruct-2507-q4_K_M` | `bge-m3:567m` |
+| `production` | `OPENAI_RESPONSE_MODELS` (ex.: `azure/gpt-5-mini`, `azure/gpt-6-luna`) | o primeiro de `OPENAI_EMBEDDINGS_MODELS` (ex.: `cohere/embed-v4.0`) |
+
+Com o SDK da OpenAI, o `type` fica em `model_extra`:
 
 ```python
 from openai import OpenAI
 
 client = OpenAI(base_url="http://localhost:8000/v1", api_key="<API_ACCESS_TOKEN>")
-print([model.id for model in client.models.list()])
+chat_models = [model.id for model in client.models.list() if model.model_extra["type"] == "chat"]
+print(chat_models)
 ```
 
 ### `GET /v1/models/{model_id}`
 
-Detalha um modelo. IDs com `/` são aceitos (ex.: `/v1/models/azure/gpt-5-mini`). Modelo fora da lista retorna `404` com `code: "model_not_found"`.
+Detalha um modelo, incluindo o `type`. IDs com `/` são aceitos (ex.: `/v1/models/azure/gpt-5-mini`). Modelo fora da lista retorna `404` com `code: "model_not_found"`.
 
 ## Documentos (base de conhecimento)
 
@@ -167,7 +187,7 @@ Responde perguntas **com base nas apostilas**, no mesmo formato da API de Chat C
 | Campo | Tipo | Descrição |
 |---|---|---|
 | `messages` | lista | Conversa no formato da OpenAI. A **última** mensagem deve ser do usuário; ela é a pergunta (máx. 4000 caracteres). `content` aceita texto ou partes `{"type": "text"}`. |
-| `model` | string | Opcional. Um dos IDs de `GET /v1/models`; padrão: o primeiro da lista. |
+| `model` | string | Opcional. Um dos IDs com `type: "chat"` em `GET /v1/models`; padrão: o primeiro deles. Um modelo de embedding retorna `400 invalid_model_type`. |
 | `stream` | bool | `true` para SSE (padrão `false`). |
 | `top_k` | int | Extensão opcional: quantos trechos recuperar (padrão 4, máx. 8). |
 
@@ -218,6 +238,6 @@ Sem streaming, `response.model_extra["sources"]` traz as fontes.
 
 #### Erros
 
-- Antes do primeiro token (modelo inválido, provedor indisponível): status HTTP de erro com o corpo no formato da OpenAI (`404 model_not_found`, `502 provider_error`, `504 provider_timeout`…).
+- Antes do primeiro token (modelo inválido, provedor indisponível): status HTTP de erro com o corpo no formato da OpenAI (`404 model_not_found`, `400 invalid_model_type`, `502 provider_error`, `504 provider_timeout`…).
 - Depois que o stream começou: um evento `data: {"error": {...}}` encerra o stream (sem `[DONE]`); os SDKs da OpenAI transformam esse evento em exceção.
 - Se o cliente desconectar, a geração no provedor é cancelada.

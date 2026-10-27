@@ -7,7 +7,7 @@ Passo a passo para testar a Chatbot API pelo [Postman](https://www.postman.com/d
 | Pasta | Token | Conteúdo |
 |---|---|---|
 | 1. Saúde | nenhum | `GET /health` e `GET /ready` |
-| 2. Modelos | `accessToken` | Lista os modelos (e preenche a variável `model`) e detalha um modelo |
+| 2. Modelos | `accessToken` | Lista os modelos com o `type` (`chat` ou `embedding`), preenche a variável `model` e detalha um modelo |
 | 3. Chat (RAG) | `accessToken` | Pergunta com e sem streaming, abstenção fora do escopo, conversa com histórico e `top_k` |
 | 4. Documentos (admin) | `adminToken` | Listagem e o fluxo completo de upload em partes |
 | 5. Erros esperados | variado | 401, 404 e 400 no formato de erro da OpenAI |
@@ -48,7 +48,11 @@ A autenticação já está configurada: a coleção usa *Bearer Token* com `{{ac
 ## 4. Primeiras requisições
 
 1. **1. Saúde → Health** e **Ready**: devem responder `200`.
-2. **2. Modelos → Listar modelos**: responde `200` e grava o primeiro modelo na variável `model` (em desenvolvimento, `qwen3:4b-instruct-2507-q4_K_M`). Para trocar de modelo, edite `model` na aba **Variables** com outro `id` da lista. Se `model` estiver vazia, o campo é omitido e a API usa o modelo padrão.
+2. **2. Modelos → Listar modelos**: responde `200`. Cada modelo traz o campo `type`:
+   - `chat`: gera as respostas e é o que vai em `model` no chat;
+   - `embedding`: faz a busca do RAG, é escolhido pelo ambiente e não pode ser usado no chat.
+
+   A requisição grava o primeiro modelo `chat` na variável `model` (em desenvolvimento, `qwen3:4b-instruct-2507-q4_K_M`; em produção, `azure/gpt-5-mini`). Para trocar de modelo, edite `model` na aba **Variables** com outro `id` do tipo `chat`. Se `model` estiver vazia, o campo é omitido e a API usa o modelo padrão.
 
 ## 5. Chat (RAG)
 
@@ -165,6 +169,7 @@ A pasta **5. Erros esperados** valida os cenários negativos. Todos voltam no fo
 | Sem token | `401` |
 | Token de acesso em rota admin | `401` |
 | Modelo inexistente | `404` `model_not_found` |
+| Modelo de embedding no chat | `400` `invalid_model_type` |
 | Pergunta longa demais (mais de 4000 caracteres) | `400` `question_too_long` |
 | Parâmetro não suportado (`tools`) | `400` `unsupported_parameter` |
 | Sem mensagem do usuário | `400` `invalid_messages` |
@@ -181,6 +186,6 @@ Em desenvolvimento, sem GPU, a execução completa leva cerca de 2 a 3 minutos p
 
 ## 9. Testar outro ambiente
 
-Para testar **localmente com os modelos de produção**, rode `make up-prod`; para voltar ao desenvolvimento, `make up`. Mudar `API_ENV` no `.env` não afeta o container. Veja a seção "Alternar entre desenvolvimento e produção (local)" do README. A `baseUrl` e os tokens continuam os mesmos. Rode **Listar modelos** de novo: se `model` ainda guardar o modelo do outro ambiente, apague o valor antes, porque a requisição só a preenche quando está vazia.
+Para testar **localmente com os modelos de produção**, rode `make up-prod`; para voltar ao desenvolvimento, `make up`. Mudar `API_ENV` no `.env` não afeta o container. Veja a seção "Alternar entre desenvolvimento e produção (local)" do README. A `baseUrl` e os tokens continuam os mesmos. Rode **Listar modelos** de novo: se `model` guardar um modelo que não existe no ambiente atual, ela é trocada pelo primeiro modelo `chat`.
 
 Para apontar para produção (Cloud Run), troque `baseUrl` pela URL do serviço e use os tokens de **produção** em `accessToken`/`adminToken`. Em produção, `Listar modelos` retorna os modelos de `OPENAI_RESPONSE_MODELS`. Atualize `model` com o modelo desejado, ou deixe vazio para usar o padrão.
