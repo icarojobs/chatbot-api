@@ -82,6 +82,13 @@ NOT_A_PDF = (HTTPStatus.UNSUPPORTED_MEDIA_TYPE, INVALID_PDF_MESSAGE, "unsupporte
 INVALID_DOCUMENT_CODE = "invalid_document"
 
 
+async def _store(ingestion: IngestionService, filename: str, data: bytes) -> uuid.UUID:
+    try:
+        return await ingestion.store(filename, data)
+    except InvalidDocumentError as exc:
+        raise _error(HTTPStatus.UNPROCESSABLE_ENTITY, str(exc), INVALID_DOCUMENT_CODE) from exc
+
+
 class UploadService:
     def __init__(self, session_factory: SessionFactory, max_bytes: int, ttl: timedelta) -> None:
         self._session_factory = session_factory
@@ -131,16 +138,27 @@ class UploadService:
             await session.commit()
             return UploadState(upload, await self._received_parts(session, upload_id))
 
+    async def store_file(
+        self, filename: str, data: bytes, ingestion: IngestionService
+    ) -> uuid.UUID:
+        name = safe_filename(filename)
+        if name is None:
+            raise _error(*INVALID_FILENAME)
+        if not is_pdf(data):
+            raise _error(*NOT_A_PDF)
+        return await _store(ingestion, name, data)
+
+    async def delete_all(self) -> int:
+        async with self._session_factory() as session:
+            result = await session.execute(delete(UploadSession).returning(UploadSession.id))
+            await session.commit()
+            return len(result.all())
+
     async def complete(self, upload_id: uuid.UUID, ingestion: IngestionService) -> uuid.UUID:
         async with self._session_factory() as session:
             upload = await self._get_open(session, upload_id)
             data = await self._assemble(session, upload)
-            try:
-                document_id = await ingestion.store(upload.filename, data)
-            except InvalidDocumentError as exc:
-                raise _error(
-                    HTTPStatus.UNPROCESSABLE_ENTITY, str(exc), INVALID_DOCUMENT_CODE
-                ) from exc
+            document_id = await _store(ingestion, upload.filename, data)
             upload.status = UploadStatus.COMPLETED
             upload.document_id = document_id
             await session.execute(delete(UploadPart).where(UploadPart.upload_id == upload_id))

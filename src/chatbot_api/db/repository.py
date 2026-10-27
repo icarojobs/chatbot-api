@@ -1,7 +1,7 @@
 import uuid
 from collections.abc import Iterable, Sequence
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from chatbot_api.db.models import Chunk, ChunkEmbedding, Document, DocumentStatus
@@ -33,6 +33,16 @@ class DocumentRepository:
             statement = statement.where(Document.id == document_id)
         rows = await self._session.execute(statement)
         return [(document, count) for document, count in rows]
+
+    async def delete(self, document_id: uuid.UUID) -> bool:
+        result = await self._session.execute(
+            delete(Document).where(Document.id == document_id).returning(Document.id)
+        )
+        return result.first() is not None
+
+    async def delete_all(self) -> int:
+        result = await self._session.execute(delete(Document).returning(Document.id))
+        return len(result.all())
 
     def add(
         self, filename: str, content_hash: str, page_count: int, drafts: Sequence[ChunkDraft]
