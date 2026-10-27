@@ -1,4 +1,7 @@
 .env
+.env.*
+!.env.example
+!.env.production.example
 docs/apostilas/*
 
 # Geralmente, deixo esse arquivo abaixo ignorado, mas para entenderem como preparo o conhecimento especializado da IA por projeto, estarei enviando para vocês analisarem.

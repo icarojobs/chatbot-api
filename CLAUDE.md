@@ -9,6 +9,8 @@ make sync        # rotina de abertura: atualiza a main e remove branches de PRs 
 make install     # uv sync --frozen (Python 3.14 + deps de dev)
 make run         # API local com reload em :8000 (uvicorn --factory chatbot_api.main:create_app)
 make check       # ruff + mypy strict + pytest com --cov-fail-under=95 (o mesmo que a CI)
+make deploy      # Cloud Run (gcloud autenticado + .env.production; ver docs/hospedagem/DEPLOY.md)
+make ingest-prod # ingere docs/apostilas no Neon com o embedding de produção
 make up / down   # docker compose: api, postgres (pgvector) e ollama (+ ollama-models baixa os modelos de dev)
 uv run pytest tests/integration/test_health.py::test_health_is_ok   # um teste específico
 uv run python -m chatbot_api.ingest docs/apostilas                  # ingere PDFs (idempotente)
