@@ -51,5 +51,19 @@ Os relatórios completos ficam em **Security → Code scanning**. Decisões deta
 
 ---
 
+## COMO EXECUTAR
+
+Pré-requisitos: Docker com Compose v2 e, para desenvolvimento local, [uv](https://docs.astral.sh/uv/) 0.13.6.
+
+```bash
+cp .env.example .env              # preencha os tokens (openssl rand -hex 32) e POSTGRES_PASSWORD
+make up                           # API em http://localhost:8000 (docs em /docs), Postgres e Ollama
+make install && make check        # dependências, lint, tipos e testes (cobertura mínima de 95%)
+```
+
+Uso da API: [manual](docs/manuais/MANUAL_DA_API.md).
+
+---
+
 ## PLANEJAMENTO
 O desenvolvimento segue o [plano por fases](docs/planejamento/PLANO_DE_DESENVOLVIMENTO.md), com um PR por fase. As decisões de base estão na [RFC-0002](docs/RFC/RFC-0002.md).
