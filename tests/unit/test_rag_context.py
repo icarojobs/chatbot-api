@@ -2,7 +2,14 @@ import uuid
 
 from chatbot_api.providers.base import ChatRole
 from chatbot_api.rag.context import select_context
-from chatbot_api.rag.prompting import SYSTEM_PROMPT, build_messages, format_pages
+from chatbot_api.rag.prompting import (
+    ANSWER_REMINDER,
+    CLIENT_INSTRUCTIONS_HEADER,
+    INSTRUCTIONS_REMINDER,
+    SYSTEM_PROMPT,
+    build_messages,
+    format_pages,
+)
 from chatbot_api.rag.retrieval import RetrievedChunk
 
 
@@ -41,4 +48,11 @@ def test_builds_messages_with_numbered_sources() -> None:
     assert messages[1].role is ChatRole.USER
     assert "[1] apostila.pdf (p. 1)\nPrimeiro" in messages[1].content
     assert "[2] apostila.pdf (p. 2-3)\nSegundo" in messages[1].content
-    assert messages[1].content.endswith("PERGUNTA:\nO que é matriciamento?")
+    assert messages[1].content.endswith(f"PERGUNTA:\nO que é matriciamento?\n\n{ANSWER_REMINDER}")
+
+
+def test_client_instructions_extend_the_system_prompt_and_reminder() -> None:
+    messages = build_messages("O que é PTS?", [chunk(0.9, "Primeiro")], "Seja breve.")
+
+    assert messages[0].content == f"{SYSTEM_PROMPT}\n\n{CLIENT_INSTRUCTIONS_HEADER}\nSeja breve."
+    assert messages[1].content.endswith(f"{ANSWER_REMINDER} {INSTRUCTIONS_REMINDER}")

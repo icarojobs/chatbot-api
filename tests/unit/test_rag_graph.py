@@ -42,7 +42,7 @@ async def test_answers_with_streamed_tokens_and_sources() -> None:
     assert retriever.calls == [("fake-embedding", 3)]
     model, messages, max_tokens = chat.calls[0]
     assert (model, max_tokens) == ("chat-model", 321)
-    assert messages[1].content.endswith("PERGUNTA:\nO que é saúde mental?")
+    assert "PERGUNTA:\nO que é saúde mental?\n\n" in messages[1].content
 
 
 async def test_abstains_without_calling_the_llm_when_context_is_insufficient() -> None:

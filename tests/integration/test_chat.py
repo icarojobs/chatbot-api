@@ -12,7 +12,11 @@ from openai.types.chat import ChatCompletionUserMessageParam
 from chatbot_api.core.config import Settings
 from chatbot_api.core.errors import ApiError, ErrorType
 from chatbot_api.rag.graph import RAGNodes, RAGSettings, build_rag_graph
-from chatbot_api.rag.prompting import ABSTENTION_MESSAGE
+from chatbot_api.rag.prompting import (
+    ABSTENTION_MESSAGE,
+    CLIENT_INSTRUCTIONS_HEADER,
+    SYSTEM_PROMPT,
+)
 from chatbot_api.rag.service import RAGService
 from tests.conftest import ACCESS_TOKEN, TEST_BASE_URL, auth_header
 from tests.fakes import FakeChatProvider, FakeEmbeddingProvider, FakeRetriever
@@ -195,7 +199,49 @@ async def test_uses_last_user_message_and_text_parts(
     )
 
     assert response.status_code == HTTPStatus.OK
-    assert chat.calls[0][1][1].content.endswith("PERGUNTA:\nO que é PTS?")
+    assert "PERGUNTA:\nO que é PTS?\n\n" in chat.calls[0][1][1].content
+
+
+async def test_system_and_developer_messages_become_client_instructions(
+    client: AsyncClient, chat: FakeChatProvider
+) -> None:
+    messages = [
+        {"role": "system", "content": "Responda em até 3 tópicos."},
+        {"role": "developer", "content": [{"type": "text", "text": "Use linguagem simples."}]},
+        {"role": "system", "content": "   "},
+        QUESTION,
+    ]
+
+    response = await client.post(
+        "/v1/chat/completions", json={"messages": messages}, headers=HEADERS
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    system_prompt = chat.calls[0][1][0].content
+    assert system_prompt.startswith(SYSTEM_PROMPT)
+    assert system_prompt.endswith(
+        f"{CLIENT_INSTRUCTIONS_HEADER}\nResponda em até 3 tópicos.\n\nUse linguagem simples."
+    )
+
+
+async def test_without_instructions_uses_only_the_api_system_prompt(
+    client: AsyncClient, chat: FakeChatProvider
+) -> None:
+    await post(client)
+
+    assert chat.calls[0][1][0].content == SYSTEM_PROMPT
+
+
+async def test_openapi_has_chat_examples_without_additional_properties(
+    client: AsyncClient,
+) -> None:
+    schema = (await client.get("/openapi.json")).json()
+
+    request_schema = schema["components"]["schemas"]["ChatCompletionRequest"]
+    body = schema["paths"]["/v1/chat/completions"]["post"]["requestBody"]
+    examples = body["content"]["application/json"]["examples"]
+    assert "additionalProperties" not in request_schema
+    assert {"simples", "instrucoes_system", "streaming"} <= set(examples)
 
 
 @pytest.mark.parametrize(
@@ -217,6 +263,11 @@ async def test_uses_last_user_message_and_text_parts(
             {"messages": [{"role": "user", "content": "x" * 4001}]},
             HTTPStatus.BAD_REQUEST,
             "question_too_long",
+        ),
+        (
+            {"messages": [{"role": "system", "content": "x" * 4001}, QUESTION]},
+            HTTPStatus.BAD_REQUEST,
+            "instructions_too_long",
         ),
         ({"tools": [{"type": "function"}]}, HTTPStatus.BAD_REQUEST, "unsupported_parameter"),
         ({"n": 2}, HTTPStatus.BAD_REQUEST, None),

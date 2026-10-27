@@ -6,7 +6,7 @@ from http import HTTPStatus
 from typing import Annotated, Any, Literal
 
 import structlog
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Body, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -19,6 +19,8 @@ from chatbot_api.rag.service import AnswerCompleted, RAGEvent, RAGService, Sourc
 logger = structlog.get_logger(__name__)
 
 QUESTION_MAX_CHARS = 4000
+INSTRUCTIONS_MAX_CHARS = 4000
+INSTRUCTION_ROLES = ("system", "developer")
 COMPLETION_ID_PREFIX = "chatcmpl-"
 FINISH_REASON = "stop"
 ASSISTANT_ROLE = "assistant"
@@ -29,6 +31,9 @@ STREAM_FAILED_MESSAGE = "A geração da resposta foi interrompida por um erro. T
 
 NO_USER_MESSAGE = "A conversa precisa terminar com uma mensagem do usuário com texto."
 QUESTION_TOO_LONG = f"A pergunta excede {QUESTION_MAX_CHARS} caracteres."
+INSTRUCTIONS_TOO_LONG = (
+    f"As instruções (mensagens system/developer) excedem {INSTRUCTIONS_MAX_CHARS} caracteres."
+)
 UNSUPPORTED_PARAMETER = "O parâmetro '{name}' não é suportado por esta API."
 UNSUPPORTED_PARAMETERS = ("tools", "functions", "tool_choice", "function_call", "logprobs")
 
@@ -52,10 +57,14 @@ class ChatCompletionMessage(BaseModel):
         return self.content or ""
 
 
+def _hide_additional_properties(schema: dict[str, Any]) -> None:
+    schema.pop("additionalProperties", None)
+
+
 class ChatCompletionRequest(BaseModel):
     """Subset of the OpenAI Chat Completions request; unknown fields are ignored, as in OpenAI."""
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="allow", json_schema_extra=_hide_additional_properties)
 
     model: str | None = Field(default=None, examples=["azure/gpt-5-mini"])
     messages: list[ChatCompletionMessage] = Field(min_length=1)
@@ -91,6 +100,17 @@ def extract_question(request: ChatCompletionRequest) -> str:
     if len(question) > QUESTION_MAX_CHARS:
         raise _invalid(QUESTION_TOO_LONG, "question_too_long")
     return question
+
+
+def extract_instructions(request: ChatCompletionRequest) -> str:
+    instructions = "\n\n".join(
+        text
+        for message in request.messages
+        if message.role in INSTRUCTION_ROLES and (text := message.text().strip())
+    )
+    if len(instructions) > INSTRUCTIONS_MAX_CHARS:
+        raise _invalid(INSTRUCTIONS_TOO_LONG, "instructions_too_long")
+    return instructions
 
 
 def _invalid(message: str, code: str) -> ApiError:
@@ -199,21 +219,74 @@ def get_rag_service(request: Request) -> RAGService:
 Rag = Annotated[RAGService, Depends(get_rag_service)]
 
 
+def _user(content: str) -> dict[str, str]:
+    return {"role": "user", "content": content}
+
+
+CHAT_EXAMPLES: dict[str, dict[str, Any]] = {
+    "simples": {
+        "summary": "Pergunta simples",
+        "value": {"messages": [_user("O que é matriciamento em saúde mental?")]},
+    },
+    "modelo_e_top_k": {
+        "summary": "Escolhendo o modelo e a quantidade de trechos (top_k)",
+        "description": "`model`: um id com `type: chat` em `GET /v1/models`. "
+        "`top_k`: trechos recuperados (padrão 4, máximo 8).",
+        "value": {
+            "model": "qwen3:4b-instruct-2507-q4_K_M",
+            "top_k": 6,
+            "messages": [
+                _user("Quais são as estratégias de cuidado em saúde mental na atenção primária?")
+            ],
+        },
+    },
+    "instrucoes_system": {
+        "summary": "Com instruções de sistema (role system)",
+        "description": "Ajustam tom, formato, extensão e idioma, sem burlar as regras da API "
+        "(responder só com base nas apostilas, citar fontes, abster-se sem evidência).",
+        "value": {
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "Responda em no máximo 3 tópicos curtos, em linguagem simples.",
+                },
+                _user("O que é o Projeto Terapêutico Singular?"),
+            ]
+        },
+    },
+    "fora_do_escopo": {
+        "summary": "Fora do escopo (abstenção)",
+        "description": "Sem evidência nas apostilas: `abstained: true` e `sources: []`, sem chamar "
+        "o LLM.",
+        "value": {"messages": [_user("Qual é a receita de bolo de cenoura?")]},
+    },
+    "streaming": {
+        "summary": "Streaming (SSE)",
+        "description": "O Swagger exibe os eventos só ao final; para ver o texto chegando aos "
+        "poucos, use o Postman ou `curl -N`.",
+        "value": {"stream": True, "messages": [_user("O que é matriciamento?")]},
+    },
+}
+
+ChatPayload = Annotated[ChatCompletionRequest, Body(openapi_examples=CHAT_EXAMPLES)]
+
+
 @router.post(
     "/chat/completions",
     summary="Responde perguntas com base nas apostilas (formato da API da OpenAI)",
     response_model=None,
 )
 async def create_chat_completion(
-    payload: ChatCompletionRequest, request: Request, rag: Rag
+    payload: ChatPayload, request: Request, rag: Rag
 ) -> StreamingResponse | dict[str, Any]:
     settings: Settings = request.app.state.settings
     profile: ProviderProfile = request.app.state.provider_profile
     question = extract_question(payload)
+    instructions = extract_instructions(payload)
     model = profile.resolve_chat_model(payload.model)
     top_k = min(payload.top_k or settings.rag_top_k_default, settings.rag_top_k_max)
 
-    events = aiter(rag.stream(question, model, top_k))
+    events = aiter(rag.stream(question, model, top_k, instructions))
     first = await anext(events)
     formatter = CompletionFormatter(model)
     if not payload.stream:

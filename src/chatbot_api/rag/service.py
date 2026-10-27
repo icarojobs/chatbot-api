@@ -56,9 +56,16 @@ class RAGService:
     def __init__(self, graph: CompiledStateGraph[RAGState, None, RAGState, RAGState]) -> None:
         self._graph = graph
 
-    async def stream(self, question: str, model: str, top_k: int) -> AsyncIterator[RAGEvent]:
+    async def stream(
+        self, question: str, model: str, top_k: int, instructions: str = ""
+    ) -> AsyncIterator[RAGEvent]:
         final_state: RAGState = {}
-        initial: RAGState = {"question": question, "model": model, "top_k": top_k}
+        initial: RAGState = {
+            "question": question,
+            "instructions": instructions,
+            "model": model,
+            "top_k": top_k,
+        }
         async for mode, payload in self._graph.astream(
             initial, stream_mode=[CUSTOM_MODE, VALUES_MODE]
         ):
