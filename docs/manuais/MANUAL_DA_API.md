@@ -60,3 +60,28 @@ Verifica se a aplicação e suas dependências estão prontas. Retorna `200 {"st
 ```bash
 curl http://localhost:8000/ready
 ```
+
+### `GET /v1/models`
+
+Lista os modelos de chat disponíveis no ambiente (formato da OpenAI). Requer `API_ACCESS_TOKEN`.
+
+```bash
+curl http://localhost:8000/v1/models -H "Authorization: Bearer $API_ACCESS_TOKEN"
+```
+
+```json
+{"object": "list", "data": [{"id": "azure/gpt-5-mini", "object": "model", "created": 0, "owned_by": "chatbot-api"}]}
+```
+
+Em `development` a lista traz o modelo do Ollama; em `production`, os modelos de `OPENAI_RESPONSE_MODELS`. Com o SDK da OpenAI:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="<API_ACCESS_TOKEN>")
+print([model.id for model in client.models.list()])
+```
+
+### `GET /v1/models/{model_id}`
+
+Detalha um modelo. IDs com `/` são aceitos (ex.: `/v1/models/azure/gpt-5-mini`). Modelo fora da lista retorna `404` com `code: "model_not_found"`.

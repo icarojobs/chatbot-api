@@ -9,7 +9,7 @@ make sync        # rotina de abertura: atualiza a main e remove branches de PRs 
 make install     # uv sync --frozen (Python 3.14 + deps de dev)
 make run         # API local com reload em :8000 (uvicorn --factory chatbot_api.main:create_app)
 make check       # ruff + mypy strict + pytest com --cov-fail-under=95 (o mesmo que a CI)
-make up / down   # docker compose: api, postgres (pgvector) e ollama (+ ollama-models baixa qwen3:4b e bge-m3)
+make up / down   # docker compose: api, postgres (pgvector) e ollama (+ ollama-models baixa os modelos de dev)
 uv run pytest tests/integration/test_health.py::test_health_is_ok   # um teste específico
 ```
 
@@ -23,6 +23,8 @@ Portas do host são configuráveis no `.env` (`API_HOST_PORT`, `POSTGRES_HOST_PO
 - Auth: dependências `require_access_token` / `require_admin_token` (`core/security.py`).
 - Rate limit global por IP; atrás de proxy, `TRUSTED_PROXY_HOPS` define qual entrada do `X-Forwarded-For` é confiável.
 - `/ready` executa as funções em `app.state.readiness_checks` — novas dependências (banco, provedor) registram seu check ali.
+- Provedores (`providers/`): contratos `ChatModelProvider`/`EmbeddingProvider` e um único `OpenAICompatibleProvider` (SDK `openai`, que usa `httpx2` — nos testes use `httpx2.MockTransport`). `build_provider_profile` escolhe Ollama (dev) ou o provedor real (prod) pelo `API_ENV`; o cliente vive no lifespan (`app.state.provider`). Erros do SDK viram `ApiError` seguros em `providers/errors.py`.
+- Provedor real validado (ver ADR-0002): embeddings `cohere/embed-v4.0` com 1536 dimensões; `azure/gpt-5-mini` é modelo de raciocínio — use `max_completion_tokens` com folga (`LLM_MAX_OUTPUT_TOKENS`), senão a resposta sai vazia.
 
 Stack (versões sempre pinadas, nunca `latest`): Python 3.14.x, uv 0.13.x, FastAPI 0.162.x (com docs automáticas), SDK `openai`, LangGraph 1.2.x, PostgreSQL + pgvector.
 
@@ -45,7 +47,7 @@ Hospedagem: Google Cloud Run + Neon (Postgres com pgvector); Render descartado (
 
 Variáveis em `.env` (não rastreado; exemplo em `.env.example`): `API_ENV`, `OPENAI_BASE_URL`, `OPENAI_ACCESS_KEY`, `OPENAI_RESPONSE_MODELS`, `OPENAI_EMBEDDINGS_MODELS`.
 
-- `API_ENV=development` (padrão): Ollama (via docker compose, GPU GTX 1650 SUPER 4 GB) com `qwen3:4b` (chat) e `bge-m3` (embeddings), pelo mesmo adaptador compatível com OpenAI usado em produção.
+- `API_ENV=development` (padrão): Ollama (via docker compose, GPU GTX 1650 SUPER 4 GB) com `qwen3:4b-instruct-2507-q4_K_M` (chat, sem modo de raciocínio) e `bge-m3:567m` (embeddings), pelo mesmo adaptador compatível com OpenAI usado em produção.
 - Embeddings de dev e prod têm modelos/dimensões diferentes e não são comparáveis: os vetores ficam separados por `embedding_model`.
 - `API_ENV=production`: única situação em que o provedor real é chamado.
 - Testes unitários sempre com mocks, usando apenas uma amostra dos modelos configurados.
