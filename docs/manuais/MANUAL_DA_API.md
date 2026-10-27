@@ -113,10 +113,18 @@ data = path.read_bytes()
 headers = {"Authorization": "Bearer <API_ADMIN_TOKEN>"}
 
 with httpx.Client(base_url="http://localhost:8000", headers=headers, timeout=120) as client:
-    upload = client.post(
-        "/v1/documents/uploads",
-        json={"filename": path.name, "size": len(data), "sha256": hashlib.sha256(data).hexdigest()},
-    ).raise_for_status().json()
+    upload = (
+        client.post(
+            "/v1/documents/uploads",
+            json={
+                "filename": path.name,
+                "size": len(data),
+                "sha256": hashlib.sha256(data).hexdigest(),
+            },
+        )
+        .raise_for_status()
+        .json()
+    )
 
     for number in range(1, upload["total_parts"] + 1):
         start = (number - 1) * upload["part_size"]
@@ -126,7 +134,9 @@ with httpx.Client(base_url="http://localhost:8000", headers=headers, timeout=120
             headers={"Content-Type": "application/octet-stream"},
         ).raise_for_status()
 
-    document = client.post(f"/v1/documents/uploads/{upload['id']}/complete").raise_for_status().json()
+    document = (
+        client.post(f"/v1/documents/uploads/{upload['id']}/complete").raise_for_status().json()
+    )
     print(document["id"], document["status"])
 ```
 
