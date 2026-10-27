@@ -11,13 +11,13 @@ dependencies = [
     "pydantic-settings==2.16.1",
     "structlog==26.1.0",
     "limits==5.8.0",
-    "openai==3.39.0",
-    "sqlalchemy[asyncio]==2.1.6",
+    "openai==3.35.1",
+    "sqlalchemy[asyncio]==2.1.5",
     "psycopg[binary]==3.3.6",
     "pgvector==0.5.1",
-    "alembic==1.20.1",
-    "pypdf==6.21.3",
-    "langgraph==1.2.18",
+    "alembic==1.20.0",
+    "pypdf==6.21.1",
+    "langgraph==1.2.16",
 ]
 
 [dependency-groups]
@@ -25,9 +25,9 @@ dev = [
     "httpx==0.28.1",
     "mypy==2.4.0",
     "pytest==9.1.1",
-    "pytest-asyncio==1.4.1",
+    "pytest-asyncio==1.4.0",
     "pytest-cov==7.1.0",
-    "ruff==0.17.3",
+    "ruff==0.17.1",
 ]
 
 [build-system]
@@ -36,6 +36,10 @@ build-backend = "uv_build"
 
 [tool.uv]
 required-version = "==0.13.6"
+# Supply-chain cooldown: only resolve releases older than 7 days. FastAPI 0.162.x is required
+# by the README and its first release is newer than that, so it is the documented exception.
+exclude-newer = "7 days"
+exclude-newer-package = { fastapi = false }
 
 [tool.ruff]
 line-length = 100
