@@ -249,7 +249,7 @@ Responde perguntas **com base nas apostilas**, no mesmo formato da API de Chat C
 | `messages` | lista | Conversa no formato da OpenAI. A **última** mensagem deve ser do usuário; ela é a pergunta (máx. 4000 caracteres). `content` aceita texto ou partes `{"type": "text"}`. |
 | `model` | string | Opcional. Um dos IDs com `type: "chat"` em `GET /v1/models`; padrão: o primeiro deles. Um modelo de embedding retorna `400 invalid_model_type`. |
 | `stream` | bool | `true` para SSE (padrão `false`). |
-| `top_k` | int | Extensão opcional: quantos trechos recuperar (padrão 4, máx. 8). |
+| `top_k` | int | Extensão opcional: quantos trechos recuperar (padrão 6, máx. 8). |
 
 Campos desconhecidos são ignorados; `tools`, `functions`, `tool_choice`, `function_call`, `logprobs` e `n > 1` retornam `400`.
 
