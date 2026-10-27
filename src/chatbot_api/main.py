@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from chatbot_api.api.routes import documents, health, models
+from chatbot_api.api.routes import chat, documents, health, models
 from chatbot_api.core.config import Settings, get_settings
 from chatbot_api.core.errors import register_error_handlers
 from chatbot_api.core.logging import RequestContextMiddleware, configure_logging
@@ -15,6 +15,7 @@ from chatbot_api.db.session import (
 )
 from chatbot_api.providers.openai_compatible import OpenAICompatibleProvider, create_client
 from chatbot_api.providers.profile import build_provider_profile
+from chatbot_api.rag.factory import build_rag_service
 
 API_TITLE = "ChatBot API"
 API_DESCRIPTION = (
@@ -36,6 +37,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             create_client(profile, resolved_settings), profile.embedding_model
         )
         app.state.provider = provider
+        app.state.rag_service = build_rag_service(
+            provider, provider, app.state.session_factory, resolved_settings
+        )
         try:
             yield
         finally:
@@ -61,4 +65,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router)
     app.include_router(models.router)
     app.include_router(documents.router)
+    app.include_router(chat.router)
     return app

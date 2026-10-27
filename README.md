@@ -62,7 +62,15 @@ make install && make check        # dependências, lint, tipos e testes (cobertu
 uv run python -m chatbot_api.ingest docs/apostilas   # carrega as apostilas na base (idempotente)
 ```
 
-Uso da API: [manual](docs/manuais/MANUAL_DA_API.md).
+Pergunta com streaming, no formato da OpenAI:
+
+```bash
+curl -N http://localhost:8000/v1/chat/completions \
+  -H "Authorization: Bearer $API_ACCESS_TOKEN" -H "Content-Type: application/json" \
+  -d '{"stream": true, "messages": [{"role": "user", "content": "O que é matriciamento?"}]}'
+```
+
+Uso completo da API: [manual](docs/manuais/MANUAL_DA_API.md).
 
 ---
 

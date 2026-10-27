@@ -155,3 +155,67 @@ with httpx.Client(base_url="http://localhost:8000", headers=headers, timeout=120
 ### `GET /v1/documents` e `GET /v1/documents/{id}`
 
 Listam/detalham documentos com `status` (`processing`, `ready`, `failed`), `page_count` e `chunk_count`.
+
+## Chat (RAG)
+
+### `POST /v1/chat/completions`
+
+Responde perguntas **com base nas apostilas**, no mesmo formato da API de Chat Completions da OpenAI. Requer `API_ACCESS_TOKEN`. Qualquer SDK/cliente da OpenAI funciona trocando apenas `base_url` e `api_key`.
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `messages` | lista | Conversa no formato da OpenAI. A **última** mensagem deve ser do usuário; ela é a pergunta (máx. 4000 caracteres). `content` aceita texto ou partes `{"type": "text"}`. |
+| `model` | string | Opcional. Um dos IDs de `GET /v1/models`; padrão: o primeiro da lista. |
+| `stream` | bool | `true` para SSE (padrão `false`). |
+| `top_k` | int | Extensão opcional: quantos trechos recuperar (padrão 4, máx. 8). |
+
+Campos desconhecidos são ignorados; `tools`, `functions`, `tool_choice`, `function_call`, `logprobs` e `n > 1` retornam `400`.
+
+A resposta inclui dois campos extras (ignorados por clientes da OpenAI):
+
+- `sources`: trechos usados como contexto (`filename`, `page_start`, `page_end`, `score`, `chunk_id`, `document_id`). As citações `[1]`, `[2]`… no texto seguem essa ordem.
+- `abstained`: `true` quando a base não tem evidência suficiente — a API responde que não encontrou a informação **sem chamar o LLM**.
+
+#### Exemplo com streaming (`curl`)
+
+```bash
+curl -N http://localhost:8000/v1/chat/completions \
+  -H "Authorization: Bearer $API_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"stream": true, "messages": [{"role": "user", "content": "O que é matriciamento em saúde mental?"}]}'
+```
+
+```text
+data: {"id": "chatcmpl-…", "object": "chat.completion.chunk", "choices": [{"index": 0, "delta": {"role": "assistant", "content": ""}, "finish_reason": null}], …}
+
+data: {"id": "chatcmpl-…", "object": "chat.completion.chunk", "choices": [{"index": 0, "delta": {"content": "Matriciamento"}, "finish_reason": null}], …}
+
+data: {"id": "chatcmpl-…", "object": "chat.completion.chunk", "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}], "sources": [{"filename": "…pdf", "page_start": 50, "page_end": 50, "score": 0.6564, …}], "abstained": false}
+
+data: [DONE]
+```
+
+#### Exemplo com o SDK da OpenAI (Python)
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="<API_ACCESS_TOKEN>")
+
+stream = client.chat.completions.create(
+    model="azure/gpt-5-mini",
+    messages=[{"role": "user", "content": "Como acolher um usuário em sofrimento psíquico?"}],
+    stream=True,
+)
+for chunk in stream:
+    if chunk.choices and chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="", flush=True)
+```
+
+Sem streaming, `response.model_extra["sources"]` traz as fontes.
+
+#### Erros
+
+- Antes do primeiro token (modelo inválido, provedor indisponível): status HTTP de erro com o corpo no formato da OpenAI (`404 model_not_found`, `502 provider_error`, `504 provider_timeout`…).
+- Depois que o stream começou: um evento `data: {"error": {...}}` encerra o stream (sem `[DONE]`); os SDKs da OpenAI transformam esse evento em exceção.
+- Se o cliente desconectar, a geração no provedor é cancelada.

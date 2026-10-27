@@ -1,4 +1,3 @@
-import uuid
 from collections.abc import Sequence
 from http import HTTPStatus
 
@@ -7,28 +6,10 @@ import pytest
 from chatbot_api.core.errors import ApiError, ErrorType
 from chatbot_api.rag.graph import RAGNodes, RAGSettings, build_rag_graph, route_after_evaluation
 from chatbot_api.rag.prompting import ABSTENTION_MESSAGE
-from chatbot_api.rag.retrieval import RetrievedChunk
 from chatbot_api.rag.service import AnswerCompleted, RAGEvent, RAGService, TextDelta
-from tests.fakes import FakeChatProvider, FakeEmbeddingProvider
+from tests.fakes import DOCUMENT_ID, FakeChatProvider, FakeEmbeddingProvider, FakeRetriever
 
 SETTINGS = RAGSettings(min_score=0.47, context_max_chars=18000, max_output_tokens=321)
-DOCUMENT_ID = uuid.uuid4()
-
-
-class FakeRetriever:
-    def __init__(self, scores: Sequence[float]) -> None:
-        self.scores = scores
-        self.calls: list[tuple[str, int]] = []
-
-    async def search(
-        self, query_vector: Sequence[float], embedding_model: str, top_k: int
-    ) -> list[RetrievedChunk]:
-        assert len(query_vector) > 0
-        self.calls.append((embedding_model, top_k))
-        return [
-            RetrievedChunk(uuid.uuid4(), DOCUMENT_ID, "apostila.pdf", 1, 2, f"trecho {i}", score)
-            for i, score in enumerate(self.scores)
-        ]
 
 
 def build_service(

@@ -1,10 +1,13 @@
+import uuid
 from collections.abc import AsyncIterator, Sequence
 
 from chatbot_api.providers.base import ChatMessage
+from chatbot_api.rag.retrieval import RetrievedChunk
 
 FAKE_EMBEDDING_MODEL = "fake-embedding"
 FAKE_DIMENSION = 8
 PDF_HEADER = b"%PDF-1.4\n"
+DOCUMENT_ID = uuid.UUID(int=999)
 
 
 class FakeEmbeddingProvider:
@@ -38,15 +41,39 @@ class FakeChatProvider:
         self.tokens = list(tokens)
         self.calls: list[tuple[str, list[ChatMessage], int]] = []
         self.error: Exception | None = None
+        self.fail_after = 0
 
     async def stream_chat(
         self, *, model: str, messages: Sequence[ChatMessage], max_output_tokens: int
     ) -> AsyncIterator[str]:
         self.calls.append((model, list(messages), max_output_tokens))
-        for token in self.tokens:
-            if self.error is not None:
+        for index, token in enumerate(self.tokens):
+            if self.error is not None and index >= self.fail_after:
                 raise self.error
             yield token
+
+
+class FakeRetriever:
+    def __init__(self, scores: Sequence[float] = (0.9, 0.6)) -> None:
+        self.scores = list(scores)
+        self.calls: list[tuple[str, int]] = []
+
+    async def search(
+        self, query_vector: Sequence[float], embedding_model: str, top_k: int
+    ) -> list[RetrievedChunk]:
+        self.calls.append((embedding_model, top_k))
+        return [
+            RetrievedChunk(
+                uuid.UUID(int=index + 1),
+                DOCUMENT_ID,
+                "apostila.pdf",
+                1,
+                2,
+                f"trecho {index}",
+                score,
+            )
+            for index, score in enumerate(self.scores)
+        ]
 
 
 def _escape(text: str) -> bytes:
