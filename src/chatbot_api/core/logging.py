@@ -9,12 +9,15 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 REQUEST_ID_HEADER = "x-request-id"
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9-]{8,64}$")
 MILLISECONDS_PER_SECOND = 1000
+NOISY_LOGGERS = ("httpx", "httpx2", "httpcore", "openai")
 
 logger = structlog.get_logger(__name__)
 
 
 def configure_logging(log_level: str) -> None:
     logging.basicConfig(format="%(message)s", level=log_level)
+    for name in NOISY_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
