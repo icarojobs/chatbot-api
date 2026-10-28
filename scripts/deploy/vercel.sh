@@ -2,7 +2,7 @@
 # Configuração da API na Vercel. Uso:
 #   scripts/deploy/vercel.sh env [.env.production]           grava as variáveis de produção no projeto vinculado
 #   scripts/deploy/vercel.sh smoke <url> [.env.production]   testa /health, /ready e /v1/models
-# Pré-requisitos: Node.js (npx), `vercel login` e `vercel link` feitos uma vez.
+# Pré-requisitos: Node.js (npx), `vercel link` feito uma vez e VERCEL_ACCESS_TOKEN no .env (ou `vercel login`).
 set -euo pipefail
 
 readonly VERCEL=(npx --yes vercel@64.0.2)
@@ -15,6 +15,13 @@ readonly PLATFORM_VARIABLES=(API_ENV=production LOG_LEVEL=INFO TRUSTED_PROXY_HOP
 
 log() { printf '\n==> %s\n' "$*"; }
 fail() { printf 'Erro: %s\n' "$*" >&2; exit 1; }
+
+# The CLI reads VERCEL_TOKEN from the environment, which keeps the token out of the process list.
+load_vercel_token() {
+  local token
+  token="$(sed -n 's/^VERCEL_ACCESS_TOKEN=//p' .env 2>/dev/null | tail -1)"
+  [[ -z "$token" ]] || export VERCEL_TOKEN="$token"
+}
 
 load_environment() {
   local env_file="$1" name
@@ -62,6 +69,7 @@ smoke_test() {
 
 main() {
   command -v npx >/dev/null || fail "Node.js (npx) não instalado."
+  load_vercel_token
   case "${1:-}" in
     env) sync_environment "${2:-.env.production}" ;;
     smoke) smoke_test "${2:-}" "${3:-.env.production}" ;;
