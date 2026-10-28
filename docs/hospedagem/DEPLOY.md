@@ -38,8 +38,11 @@ O `copy-db-neon` aplica as migrations no Neon, confere se o banco está vazio e 
 
 ## 5. Projeto na Vercel
 
+Autentique a CLI com `npx vercel@64.0.2 login` **ou** crie um token em [vercel.com/account/tokens](https://vercel.com/account/tokens) e salve-o em `VERCEL_ACCESS_TOKEN` no `.env`. Os scripts do `make` leem o token sozinhos; para a CLI, exporte `VERCEL_TOKEN` com o mesmo valor.
+
+A integração com o GitHub exige uma vez a conexão da conta do GitHub na Vercel (**Account Settings → Authentication → GitHub → Connect**).
+
 ```bash
-npx vercel@64.0.2 login
 npx vercel@64.0.2 link --yes --project chatbot-api   # cria o projeto e o arquivo .vercel/ (ignorado pelo git)
 npx vercel@64.0.2 git connect                        # vincula o repositório do GitHub
 make deploy-env                                      # grava as variáveis de produção (valores não são exibidos)
