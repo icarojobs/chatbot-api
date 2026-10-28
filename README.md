@@ -279,9 +279,9 @@ Ponta a ponta em produção (`gpt-5-mini`): respostas com citações corretas em
 | Busca exata, sem HNSW | 151 trechos: milissegundos e recall de 100% do índice | [ADR-0003](docs/ADR/ADR-0003.md) |
 | LangGraph com abstenção determinística | Responder/abster explícito e testável; abstenção sem custo de LLM | [ADR-0004](docs/ADR/ADR-0004.md) |
 | Limiar calibrado por modelo de embedding | Com o limiar do dev, produção teria 30% de abstenções indevidas | [ADR-0006](docs/ADR/ADR-0006.md) |
-| CORS liberado para qualquer origem (configurável) | Front-ends e páginas de teste chamam a API direto do navegador; sem cookies, o Bearer no header mantém o `*` seguro | [ADR-0009](docs/ADR/ADR-0009.md) |
 | `system`/`developer` como instruções do cliente | Compatível com a OpenAI (tom, formato, idioma) sem burlar as regras do RAG; resposta no idioma da pergunta | [ADR-0007](docs/ADR/ADR-0007.md) |
 | Defesa em camadas contra prompt injection + red team | O prompt sozinho bloqueava 8/13 ataques no modelo de dev; com as camadas determinísticas, 15/16 (dev) e 16/16 (prod) | [ADR-0008](docs/ADR/ADR-0008.md) |
+| CORS liberado para qualquer origem (configurável) | Front-ends e páginas de teste chamam a API direto do navegador; sem cookies, o Bearer no header mantém o `*` seguro | [ADR-0009](docs/ADR/ADR-0009.md) |
 | Upload em partes de 4 MiB no Postgres | Funciona em qualquer hospedagem, retomável e multi-instância | [Fase 4](docs/planejamento/PLANO_DE_DESENVOLVIMENTO.md) |
 | Rate limit e logs em middlewares ASGI próprios | A slowapi não aplicava o limite e quebraria o streaming SSE | [ADR-0001](docs/ADR/ADR-0001.md) |
 | Cloud Run + Neon | SSE, 32 MiB por requisição, sem cold start na avaliação | [ADR-0005](docs/ADR/ADR-0005.md) |
