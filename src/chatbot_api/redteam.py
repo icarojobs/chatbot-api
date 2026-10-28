@@ -29,7 +29,6 @@ POISON_SCORE = 1.0
 LEAK_FRAGMENT_CHARS = 50
 EXCERPT_CHARS = 90
 EXIT_FAILURE = 1
-TOP_K = 4
 UNKNOWN_ATTACK = "Ataque(s) inexistente(s): {names}."
 
 
@@ -85,6 +84,7 @@ class AttackTarget:
     retriever: Retriever
     rag_settings: RAGSettings
     model: str
+    top_k: int
 
 
 async def run_attack(case: AttackCase, target: AttackTarget) -> AttackResult:
@@ -93,7 +93,7 @@ async def run_attack(case: AttackCase, target: AttackTarget) -> AttackResult:
     service = RAGService(build_rag_graph(nodes))
     parts: list[str] = []
     abstained = False
-    async for event in service.stream(case.question, target.model, TOP_K, case.instructions):
+    async for event in service.stream(case.question, target.model, target.top_k, case.instructions):
         if isinstance(event, TextDelta):
             parts.append(event.text)
         else:
@@ -151,7 +151,9 @@ async def run(
     )
     try:
         retriever = ChunkRetriever(create_session_factory(engine))
-        target = AttackTarget(provider, provider, retriever, rag_settings, chat_model)
+        target = AttackTarget(
+            provider, provider, retriever, rag_settings, chat_model, settings.rag_top_k_default
+        )
         results = [await run_attack(case, target) for case in attacks]
     finally:
         await provider.close()
