@@ -218,6 +218,7 @@ Todas as variáveis estão documentadas no [`.env.example`](.env.example). As pr
 | `OPENAI_RESPONSE_MODELS` / `OPENAI_EMBEDDINGS_MODELS` | Allowlist de modelos (o primeiro é o padrão) |
 | `RAG_MIN_SCORE` | Override do limiar de similaridade (vazio = valor calibrado por modelo) |
 | `RATE_LIMIT_DEFAULT`, `TRUSTED_PROXY_HOPS` | Rate limit por IP e proxies confiáveis |
+| `CORS_ALLOWED_ORIGINS` | Origens liberadas no CORS, separadas por vírgula (padrão `*`, qualquer origem) |
 
 Segredos ficam apenas no `.env` (local) ou no Secret Manager (produção).
 
@@ -280,6 +281,7 @@ Ponta a ponta em produção (`gpt-5-mini`): respostas com citações corretas em
 | Limiar calibrado por modelo de embedding | Com o limiar do dev, produção teria 30% de abstenções indevidas | [ADR-0006](docs/ADR/ADR-0006.md) |
 | `system`/`developer` como instruções do cliente | Compatível com a OpenAI (tom, formato, idioma) sem burlar as regras do RAG; resposta no idioma da pergunta | [ADR-0007](docs/ADR/ADR-0007.md) |
 | Defesa em camadas contra prompt injection + red team | O prompt sozinho bloqueava 8/13 ataques no modelo de dev; com as camadas determinísticas, 15/16 (dev) e 16/16 (prod) | [ADR-0008](docs/ADR/ADR-0008.md) |
+| CORS liberado para qualquer origem (configurável) | Front-ends e páginas de teste chamam a API direto do navegador; sem cookies, o Bearer no header mantém o `*` seguro | [ADR-0009](docs/ADR/ADR-0009.md) |
 | Upload em partes de 4 MiB no Postgres | Funciona em qualquer hospedagem, retomável e multi-instância | [Fase 4](docs/planejamento/PLANO_DE_DESENVOLVIMENTO.md) |
 | Rate limit e logs em middlewares ASGI próprios | A slowapi não aplicava o limite e quebraria o streaming SSE | [ADR-0001](docs/ADR/ADR-0001.md) |
 | Cloud Run + Neon | SSE, 32 MiB por requisição, sem cold start na avaliação | [ADR-0005](docs/ADR/ADR-0005.md) |

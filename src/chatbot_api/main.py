@@ -2,6 +2,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from starlette.middleware.cors import CORSMiddleware
 
 from chatbot_api.api.routes import chat, documents, health, models
 from chatbot_api.core.config import Settings, get_settings
@@ -23,6 +24,9 @@ API_DESCRIPTION = (
     "compatível com o formato da API da OpenAI."
 )
 API_VERSION = "0.1.0"
+CORS_ALLOWED_METHODS = ("*",)
+CORS_ALLOWED_HEADERS = ("*",)
+CORS_EXPOSED_HEADERS = ("x-request-id", "retry-after")
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -62,6 +66,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         trusted_proxy_hops=resolved_settings.trusted_proxy_hops,
     )
     app.add_middleware(RequestContextMiddleware)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=resolved_settings.cors_allowed_origins,
+        allow_methods=CORS_ALLOWED_METHODS,
+        allow_headers=CORS_ALLOWED_HEADERS,
+        expose_headers=CORS_EXPOSED_HEADERS,
+    )
     app.include_router(health.router)
     app.include_router(models.router)
     app.include_router(documents.router)

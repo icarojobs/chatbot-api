@@ -80,3 +80,13 @@ def test_documents_reset_is_disabled_in_production_by_default(
     settings = settings_factory(api_env=api_env, documents_reset_enabled=enabled, **provider)
 
     assert settings.documents_reset_allowed is allowed
+
+
+def test_cors_allows_any_origin_by_default(settings: Settings) -> None:
+    assert settings.cors_allowed_origins == ("*",)
+
+
+def test_splits_comma_separated_cors_origins(settings_factory: SettingsFactory) -> None:
+    settings = settings_factory(cors_allowed_origins="https://a.example.com, http://localhost:5500")
+
+    assert settings.cors_allowed_origins == ("https://a.example.com", "http://localhost:5500")
