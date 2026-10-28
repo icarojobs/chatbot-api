@@ -44,7 +44,7 @@ curl -N https://<sua-api>/v1/chat/completions \
 flowchart LR
     Client["Cliente<br/>(SDK OpenAI, curl, Swagger)"] -->|Bearer token| API
 
-    subgraph API["FastAPI (Cloud Run)"]
+    subgraph API["FastAPI (Vercel)"]
         MW["Middlewares ASGI<br/>request-id · rate limit"] --> Routes
         Routes["/v1/chat/completions<br/>/v1/models<br/>/v1/documents"] --> RAG["RAGService<br/>(LangGraph)"]
         Routes --> Ingestion["IngestionService"]
@@ -155,7 +155,7 @@ Ajuste `API_HOST_PORT`, `POSTGRES_HOST_PORT` e `OLLAMA_HOST_PORT` no `.env`.
 
 ### Produção
 
-Deploy no **Google Cloud Run + Neon** com `make deploy` — passo a passo em [docs/hospedagem/DEPLOY.md](docs/hospedagem/DEPLOY.md).
+Deploy na **Vercel + Neon** (região São Paulo), automático a cada merge na `main` — passo a passo em [docs/hospedagem/DEPLOY.md](docs/hospedagem/DEPLOY.md).
 
 ---
 
@@ -166,7 +166,7 @@ Deploy no **Google Cloud Run + Neon** com `make deploy` — passo a passo em [do
 | `GET` | `/health`, `/ready` | — | Liveness e readiness (inclui o banco) |
 | `GET` | `/v1/models` | acesso | Modelos do ambiente (formato OpenAI) com `type`: `chat` (gera respostas) ou `embedding` (busca do RAG) |
 | `POST` | `/v1/chat/completions` | acesso | Pergunta/resposta com RAG, `stream` opcional |
-| `POST` | `/v1/documents?filename=…` | admin | Upload direto de um PDF (até 30 MB, corpo binário) |
+| `POST` | `/v1/documents?filename=…` | admin | Upload direto de um PDF (corpo binário; até 30 MB local e 4 MiB em produção) |
 | `POST` | `/v1/documents/uploads` (+ `parts`, `complete`) | admin | Upload em partes de PDFs |
 | `DELETE` | `/v1/documents/{id}` | admin | Remove um documento (trechos e embeddings juntos) |
 | `DELETE` | `/v1/documents?confirm=true` | admin | Reset: remove todos os documentos (desabilitado em produção por padrão) |
@@ -275,7 +275,7 @@ Ponta a ponta em produção (`gpt-5-mini`): respostas com citações corretas em
 |---|---|---|
 | Contrato idêntico ao da OpenAI | Qualquer SDK/cliente funciona sem adaptação | [RFC-0002](docs/RFC/RFC-0002.md) |
 | Um único adaptador OpenAI-compatible (Ollama e produção) | Trocar de modelo/ambiente é só configuração | [ADR-0002](docs/ADR/ADR-0002.md) |
-| PostgreSQL + pgvector, vetores por modelo de embedding | Durável no Cloud Run; dev (1024 dim) e prod (1536 dim) convivem | [ADR-0003](docs/ADR/ADR-0003.md) |
+| PostgreSQL + pgvector, vetores por modelo de embedding | Durável e compartilhado entre instâncias; dev (1024 dim) e prod (1536 dim) convivem | [ADR-0003](docs/ADR/ADR-0003.md) |
 | Busca exata, sem HNSW | 151 trechos: milissegundos e recall de 100% do índice | [ADR-0003](docs/ADR/ADR-0003.md) |
 | LangGraph com abstenção determinística | Responder/abster explícito e testável; abstenção sem custo de LLM | [ADR-0004](docs/ADR/ADR-0004.md) |
 | Limiar calibrado por modelo de embedding | Com o limiar do dev, produção teria 30% de abstenções indevidas | [ADR-0006](docs/ADR/ADR-0006.md) |
@@ -284,7 +284,7 @@ Ponta a ponta em produção (`gpt-5-mini`): respostas com citações corretas em
 | CORS liberado para qualquer origem (configurável) | Front-ends e páginas de teste chamam a API direto do navegador; sem cookies, o Bearer no header mantém o `*` seguro | [ADR-0009](docs/ADR/ADR-0009.md) |
 | Upload em partes de 4 MiB no Postgres | Funciona em qualquer hospedagem, retomável e multi-instância | [Fase 4](docs/planejamento/PLANO_DE_DESENVOLVIMENTO.md) |
 | Rate limit e logs em middlewares ASGI próprios | A slowapi não aplicava o limite e quebraria o streaming SSE | [ADR-0001](docs/ADR/ADR-0001.md) |
-| Cloud Run + Neon | SSE, 32 MiB por requisição, sem cold start na avaliação | [ADR-0005](docs/ADR/ADR-0005.md) |
+| Vercel + Neon (São Paulo) | Grátis sem cartão, SSE nativo, deploy contínuo só na `main`; substituiu o Cloud Run após o bloqueio do faturamento do Google Cloud | [ADR-0010](docs/ADR/ADR-0010.md) |
 
 O desenvolvimento seguiu o [plano por fases](docs/planejamento/PLANO_DE_DESENVOLVIMENTO.md), com um PR por fase descrevendo o que foi feito, os motivos e os trade-offs.
 

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["gru1"],
+  "git": {
+    "deploymentEnabled": {
+      "*": false,
+      "main": true
+    }
+  },
+  "functions": {
+    "src/chatbot_api/asgi.py": {
+      "maxDuration": 300,
+      "excludeFiles": "{tests/**,docs/**,evaluation/**,playground/**,scripts/**}"
+    }
+  }
+}

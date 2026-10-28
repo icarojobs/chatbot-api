@@ -33,7 +33,7 @@
   "item": [
     {
       "name": "1. Saúde",
-      "description": "Rotas públicas (sem token) usadas por load balancers e pelo Cloud Run.",
+      "description": "Rotas públicas (sem token) usadas por monitores de disponibilidade e pelo smoke test do deploy.",
       "item": [
         {
           "name": "Health (processo vivo)",
@@ -436,7 +436,7 @@
                 }
               ]
             },
-            "description": "Caminho mais simples: em **Body → binary** selecione o PDF inteiro (até 30 MB, `DIRECT_UPLOAD_MAX_BYTES`) e preencha a variável `fileName`. Responde 202 com o documento em `processing` e grava `documentId`. Para arquivos maiores ou conexões instáveis, use o upload em partes (1 a 4).",
+            "description": "Caminho mais simples: em **Body → binary** selecione o PDF inteiro (até 30 MB em localhost e 4 MiB em produção na Vercel, `DIRECT_UPLOAD_MAX_BYTES`) e preencha a variável `fileName`. Responde 202 com o documento em `processing` e grava `documentId`. Para arquivos maiores ou conexões instáveis, use o upload em partes (1 a 4).",
             "body": {
               "mode": "file",
               "file": {
@@ -1207,7 +1207,7 @@
       "key": "baseUrl",
       "value": "http://localhost:8000",
       "type": "string",
-      "description": "URL da API (troque pela URL do Cloud Run para testar produção)."
+      "description": "URL da API (troque pela URL da Vercel para testar produção)."
     },
     {
       "key": "accessToken",

@@ -122,7 +122,7 @@ Todas as rotas abaixo exigem o **`API_ADMIN_TOKEN`**. Há duas formas de enviar 
 
 | Forma | Quando usar |
 |---|---|
-| **Upload direto** (`POST /v1/documents`) | PDFs de até 30 MB (`DIRECT_UPLOAD_MAX_BYTES`), em uma única requisição. Ideal para o Swagger (`/docs`), o Postman e scripts simples |
+| **Upload direto** (`POST /v1/documents`) | PDFs de até 30 MB em localhost e **4 MiB em produção** (`DIRECT_UPLOAD_MAX_BYTES`; a Vercel limita cada requisição a 4,5 MB), em uma única requisição. Ideal para o Swagger (`/docs`), o Postman e scripts simples |
 | **Upload em partes** (`/v1/documents/uploads`) | Arquivos maiores, conexões instáveis (permite retomar) ou hospedagens com limite baixo por requisição |
 
 As duas formas passam pela mesma validação (nome, PDF, deduplicação por SHA-256) e pela mesma ingestão.
