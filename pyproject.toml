@@ -35,14 +35,14 @@ requires = ["uv_build>=0.13.6,<0.14"]
 build-backend = "uv_build"
 
 [tool.uv]
-required-version = "==0.13.6"
+required-version = ">=0.13.5,<0.14"
 # Supply-chain cooldown: only resolve releases older than 7 days. Exceptions: FastAPI 0.162.x is
 # required by the README; pypdf parses untrusted uploads and 6.21.1 has HIGH CVEs fixed in 6.21.2.
 exclude-newer = "7 days"
 exclude-newer-package = { fastapi = false, pypdf = false }
 
 [tool.vercel]
-entrypoint = "chatbot_api.asgi:app"
+entrypoint = "src.chatbot_api.asgi:app"
 
 [tool.vercel.scripts]
 build = "python -m chatbot_api.db.migrate"
