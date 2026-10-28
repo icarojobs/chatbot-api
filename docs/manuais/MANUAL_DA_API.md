@@ -19,6 +19,14 @@ Endpoints que consomem créditos exigem o header `Authorization: Bearer <token>`
 
 Todas as rotas são limitadas por IP (padrão `60/minute`, configurável em `RATE_LIMIT_DEFAULT`). Ao exceder, a API responde `429` com o header `Retry-After` (segundos até liberar).
 
+## CORS
+
+A API aceita chamadas de navegador de **qualquer origem** por padrão (`CORS_ALLOWED_ORIGINS=*`), inclusive de um HTML aberto direto do disco (`file://`, origem `null`). Para restringir, liste as origens separadas por vírgula, por exemplo `CORS_ALLOWED_ORIGINS=https://app.exemplo.com,http://localhost:5500`.
+
+- O token vai no header `Authorization`; a API não usa cookies, por isso `Access-Control-Allow-Credentials` não é enviado.
+- Respostas de erro (`401`, `429`, …) também levam os headers CORS, então o navegador mostra o erro real.
+- Os headers `x-request-id` e `Retry-After` ficam legíveis no JavaScript (`Access-Control-Expose-Headers`).
+
 ## Formato de erro
 
 Todos os erros seguem o formato da API da OpenAI:
@@ -249,9 +257,23 @@ Responde perguntas **com base nas apostilas**, no mesmo formato da API de Chat C
 | `messages` | lista | Conversa no formato da OpenAI. A **última** mensagem deve ser do usuário; ela é a pergunta (máx. 4000 caracteres). `content` aceita texto ou partes `{"type": "text"}`. |
 | `model` | string | Opcional. Um dos IDs com `type: "chat"` em `GET /v1/models`; padrão: o primeiro deles. Um modelo de embedding retorna `400 invalid_model_type`. |
 | `stream` | bool | `true` para SSE (padrão `false`). |
-| `top_k` | int | Extensão opcional: quantos trechos recuperar (padrão 4, máx. 8). |
+| `top_k` | int | Extensão opcional: quantos trechos recuperar (padrão 6, máx. 8). |
 
 Campos desconhecidos são ignorados; `tools`, `functions`, `tool_choice`, `function_call`, `logprobs` e `n > 1` retornam `400`.
+
+#### Proteção contra prompt injection
+
+Pergunta e instruções `system`/`developer` passam por um filtro antes de qualquer chamada ao modelo. O filtro procura tentativas de:
+- anular as regras ("ignore as instruções anteriores");
+- extrair o prompt;
+- trocar a persona do assistente (jailbreak);
+- fazer executar conteúdo codificado.
+
+Quando detecta uma delas, a API responde **`200`** com a mensagem fixa abaixo, `abstained: true` e `sources: []`, sem chamar o LLM:
+
+> Não posso atender a esse pedido: a mensagem contém instruções para alterar o funcionamento do assistente. Faça uma pergunta sobre o conteúdo das apostilas de saúde mental.
+
+Trechos de PDF com instruções embutidas são descartados do contexto. Detalhes e resultados medidos estão no [ADR-0008](../ADR/ADR-0008.md).
 
 #### Papéis (`role`) das mensagens
 

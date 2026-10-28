@@ -6,6 +6,7 @@ from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 LIST_SEPARATOR = ","
+CORS_ANY_ORIGIN = "*"
 MIN_TOKEN_LENGTH = 32
 MISSING_PRODUCTION_PROVIDER = (
     "API_ENV=production exige OPENAI_BASE_URL, OPENAI_ACCESS_KEY, "
@@ -34,6 +35,7 @@ class Settings(BaseSettings):
 
     rate_limit_default: str = "60/minute"
     trusted_proxy_hops: int = Field(default=0, ge=0)
+    cors_allowed_origins: ModelList = (CORS_ANY_ORIGIN,)
 
     openai_base_url: str = ""
     openai_access_key: SecretStr = SecretStr("")
@@ -49,7 +51,7 @@ class Settings(BaseSettings):
     provider_max_retries: int = Field(default=1, ge=0)
     llm_max_output_tokens: int = Field(default=1500, gt=0)
 
-    rag_top_k_default: int = Field(default=4, ge=1)
+    rag_top_k_default: int = Field(default=6, ge=1)
     rag_top_k_max: int = Field(default=8, ge=1)
     rag_min_score: float | None = Field(default=None, ge=0, le=1)
     rag_context_max_chars: int = Field(default=18000, gt=0)
@@ -64,6 +66,7 @@ class Settings(BaseSettings):
         "openai_embeddings_models",
         "ollama_response_models",
         "ollama_embeddings_models",
+        "cors_allowed_origins",
         mode="before",
     )
     @classmethod

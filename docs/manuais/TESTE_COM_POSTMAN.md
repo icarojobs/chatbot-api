@@ -192,6 +192,7 @@ A pasta **5. Erros esperados** valida os cenários negativos. Todos voltam no fo
 | Modelo inexistente | `404` `model_not_found` |
 | Modelo de embedding no chat | `400` `invalid_model_type` |
 | Reset sem confirmação | `400` `confirmation_required` |
+| Prompt injection (recusa) | `200` com mensagem de recusa, `abstained: true`, sem fontes |
 | Pergunta longa demais (mais de 4000 caracteres) | `400` `question_too_long` |
 | Parâmetro não suportado (`tools`) | `400` `unsupported_parameter` |
 | Sem mensagem do usuário | `400` `invalid_messages` |
