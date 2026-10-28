@@ -60,14 +60,14 @@ ABSTENTION_MESSAGE = (
 )
 
 # Untrusted text cannot open or close the prompt's own blocks (delimiter injection).
-_RESERVED_TAGS = re.compile(
+RESERVED_TAGS = re.compile(
     rf"</?\s*({DOCUMENTS_TAG}|{DOCUMENT_TAG}|{QUESTION_TAG}|{INSTRUCTIONS_TAG})\b[^>]*>",
     re.IGNORECASE,
 )
 
 
 def neutralize(text: str) -> str:
-    return _RESERVED_TAGS.sub("", text)
+    return RESERVED_TAGS.sub("", text)
 
 
 def format_pages(chunk: RetrievedChunk) -> str:

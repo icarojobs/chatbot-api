@@ -1,13 +1,16 @@
 """Deterministic prompt injection screening, applied before any model call.
 
 Catches the classic, high-signal phrasings (instruction override, prompt extraction, persona
-swaps, encoded payloads). It is one layer of defense in depth: phrasings it misses still meet
+swaps, encoded payloads) and any attempt to open or close the prompt's own blocks, which no
+legitimate question contains. It is one layer of defense in depth: phrasings it misses still meet
 the hardened prompt and the delimited, neutralized blocks in `prompting.py` (ADR-0008).
 """
 
 import re
 import unicodedata
 from collections.abc import Iterable
+
+from chatbot_api.rag.prompting import RESERVED_TAGS
 
 _INSTRUCTIONS = r"(instrucoes|regras|diretrizes|prompt|instructions|rules|guidelines)"
 
@@ -33,7 +36,7 @@ INJECTION_PATTERNS: dict[str, re.Pattern[str]] = {
             r"\b(decodifique|decode|base64)\b.{0,80}\b(execute|siga|obedeca|follow|run|obey)\b"
         ),
     }.items()
-}
+} | {"delimiter_injection": RESERVED_TAGS}
 
 
 def _fold(text: str) -> str:
