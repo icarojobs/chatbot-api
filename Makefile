@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help sync install run test lint format typecheck check up up-prod down logs deploy ingest-prod evaluate ingest ingest-prod-local
+.PHONY: help sync install run test lint format typecheck check up up-prod down logs deploy ingest-prod evaluate redteam ingest ingest-prod-local
 
 MERGED_PR_LIMIT := 200
 
@@ -69,3 +69,6 @@ ingest-prod: ## Ingere docs/apostilas no banco de produção com o embedding de 
 
 evaluate: ## Avalia o retrieval (Hit@k, MRR, abstenção) e sugere o limiar de similaridade
 	uv run python -m chatbot_api.evaluation
+
+redteam: ## Ataca o RAG com prompt injection no ambiente do container (make up ou make up-prod)
+	docker compose exec api python -m chatbot_api.redteam
