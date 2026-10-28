@@ -28,6 +28,7 @@ def target(tokens: tuple[str, ...], scores: tuple[float, ...] = (0.9,)) -> Attac
         FakeRetriever(scores),
         RAG_SETTINGS,
         "chat-model",
+        6,
     )
 
 

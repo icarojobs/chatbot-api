@@ -294,7 +294,7 @@ O desenvolvimento seguiu o [plano por fases](docs/planejamento/PLANO_DE_DESENVOL
 
 - **Histórico de conversa** não é usado na busca (apenas a última pergunta).
 - **Prompt injection**: o filtro é baseado em padrões e o modelo de dev (4B) ainda obedece a ordens disfarçadas. Em produção, os 16 ataques foram bloqueados, mas nenhuma defesa é absoluta. Rode `make redteam` a cada troca de modelo ou de prompt.
-- **Recall de 90%**: termos raros com uma única ocorrência (ex.: "redução de danos") podem ficar fora do top-4 → busca híbrida (BM25 + RRF) se a base crescer.
+- **Recall de 90%**: termos raros com uma única ocorrência (ex.: "redução de danos") podem ficar fora do top-k → busca híbrida (BM25 + RRF) se a base crescer.
 - **Rate limit por instância** (memória); Redis se houver várias instâncias sob carga.
 - **Ingestão em background no processo**: um restart durante os embeddings exige reenviar o documento (a ingestão retoma de onde parou).
 - **PDFs digitalizados** (sem texto) não são suportados (sem OCR).

@@ -345,7 +345,7 @@
             "description": "Só a **última** mensagem do usuário vira a pergunta. Mensagens `system`/`developer` são instruções do cliente: ajustam tom, formato, extensão e idioma, mas não burlam as regras da API (só apostilas, citar fontes). `top_k` (extensão, máximo 8) define quantos trechos recuperar.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"model\": \"{{model}}\",\n  \"top_k\": 6,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Responda em no máximo 3 tópicos curtos, em linguagem simples.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Olá!\"\n    },\n    {\n      \"role\": \"assistant\",\n      \"content\": \"Olá! Como posso ajudar?\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": [\n        {\n          \"type\": \"text\",\n          \"text\": \"O que é o\"\n        },\n        {\n          \"type\": \"text\",\n          \"text\": \"matriciamento?\"\n        }\n      ]\n    }\n  ]\n}",
+              "raw": "{\n  \"model\": \"{{model}}\",\n  \"top_k\": 8,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Responda em no máximo 3 tópicos curtos, em linguagem simples.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Olá!\"\n    },\n    {\n      \"role\": \"assistant\",\n      \"content\": \"Olá! Como posso ajudar?\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": [\n        {\n          \"type\": \"text\",\n          \"text\": \"O que é o\"\n        },\n        {\n          \"type\": \"text\",\n          \"text\": \"matriciamento?\"\n        }\n      ]\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"

@@ -179,7 +179,7 @@ async def test_top_k_is_capped(client: AsyncClient, retriever: FakeRetriever) ->
     await post(client, top_k=50)
     await post(client)
 
-    assert [top_k for _, top_k in retriever.calls] == [8, 4]
+    assert [top_k for _, top_k in retriever.calls] == [8, 6]
 
 
 async def test_uses_last_user_message_and_text_parts(
