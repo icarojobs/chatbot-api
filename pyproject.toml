@@ -42,7 +42,7 @@ exclude-newer = "7 days"
 exclude-newer-package = { fastapi = false, pypdf = false }
 
 [tool.vercel]
-entrypoint = "chatbot_api.asgi:app"
+entrypoint = "src.chatbot_api.asgi:app"
 
 [tool.vercel.scripts]
 build = "python -m chatbot_api.db.migrate"
