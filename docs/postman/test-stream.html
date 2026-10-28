@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teste de streaming — ChatBot API</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1d2330; --muted:#667085; --line:#d9dde3; --accent:#2563eb; --ok:#16a34a; --err:#dc2626; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1218; --card:#181c24; --text:#e6e8ec; --muted:#98a2b3; --line:#2b313c; --accent:#60a5fa; --ok:#4ade80; --err:#f87171; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui, sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:24px 16px; }
+  h1 { font-size:20px; margin:0 0 16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+  label { display:block; font-weight:600; margin:12px 0 4px; }
+  label:first-child { margin-top:0; }
+  input[type=text], input[type=password], textarea { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--text); font:inherit; }
+  textarea { min-height:90px; resize:vertical; }
+  .inline { display:flex; align-items:center; gap:8px; font-weight:600; margin-top:12px; }
+  .actions { display:flex; gap:8px; margin-top:16px; }
+  button { padding:8px 16px; border:0; border-radius:6px; background:var(--accent); color:#fff; font:inherit; font-weight:600; cursor:pointer; }
+  button.secondary { background:transparent; color:var(--text); border:1px solid var(--line); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .stats { display:flex; flex-wrap:wrap; gap:6px 18px; color:var(--muted); font-size:13px; margin-bottom:10px; }
+  .stats b { color:var(--text); }
+  #answer { white-space:pre-wrap; min-height:60px; }
+  #answer.error { color:var(--err); }
+  .badge { display:inline-block; padding:1px 8px; border-radius:99px; font-size:12px; font-weight:600; border:1px solid currentColor; }
+  .badge.ok { color:var(--ok); } .badge.err { color:var(--err); }
+  ol { margin:8px 0 0; padding-left:20px; color:var(--muted); font-size:13px; }
+  details { margin-top:12px; }
+  pre { white-space:pre-wrap; word-break:break-all; font-size:12px; max-height:320px; overflow:auto; background:var(--bg); padding:8px; border-radius:6px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Teste de streaming — ChatBot API</h1>
+
+  <form id="form" class="card">
+    <label for="url">CHATBOT API URL</label>
+    <input id="url" type="text" value="http://localhost:8000/v1/chat/completions" required>
+
+    <label for="token">Chave API (Bearer — chave padrão ou admin)</label>
+    <input id="token" type="password" autocomplete="off" required>
+
+    <label class="inline"><input id="stream" type="checkbox" checked> Stream</label>
+
+    <input id="role" type="hidden" value="user">
+
+    <label for="content">Mensagem</label>
+    <textarea id="content" required placeholder="Ex.: O que é ansiedade?"></textarea>
+
+    <div class="actions">
+      <button id="send" type="submit">Enviar</button>
+      <button id="stop" type="button" class="secondary" disabled>Parar</button>
+    </div>
+  </form>
+
+  <section class="card">
+    <div class="stats">
+      <span>Status: <b id="status">—</b></span>
+      <span>Modo: <b id="mode">—</b></span>
+      <span>1º byte: <b id="ttfb">—</b></span>
+      <span>Chunks: <b id="chunks">—</b></span>
+      <span>Total: <b id="total">—</b></span>
+      <span>Abstenção: <b id="abstained">—</b></span>
+    </div>
+    <div id="answer"></div>
+    <ol id="sources"></ol>
+    <details>
+      <summary>Resposta bruta</summary>
+      <pre id="raw"></pre>
+    </details>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const URL_STORAGE_KEY = "chatbot-test-stream-url";
+let controller = null;
+let startedAt = 0;
+
+try { const saved = localStorage.getItem(URL_STORAGE_KEY); if (saved) $("url").value = saved; } catch {}
+
+function elapsed() { return `${Math.round(performance.now() - startedAt)} ms`; }
+
+function resetOutput(streaming) {
+  for (const id of ["status", "ttfb", "chunks", "total", "abstained"]) $(id).textContent = "—";
+  $("mode").textContent = streaming ? "stream" : "não-stream";
+  $("answer").textContent = "";
+  $("answer").className = "";
+  $("sources").innerHTML = "";
+  $("raw").textContent = "";
+}
+
+function setStatus(response) {
+  const badge = document.createElement("span");
+  badge.className = `badge ${response.ok ? "ok" : "err"}`;
+  badge.textContent = `${response.status} ${response.statusText}`.trim();
+  $("status").replaceChildren(badge);
+}
+
+function showError(message) {
+  $("answer").className = "error";
+  $("answer").textContent += (($("answer").textContent ? "\n\n" : "") + message);
+}
+
+function showMetadata(payload) {
+  if ("abstained" in payload) $("abstained").textContent = payload.abstained ? "sim" : "não";
+  if (!Array.isArray(payload.sources)) return;
+  $("sources").innerHTML = "";
+  for (const source of payload.sources) {
+    const item = document.createElement("li");
+    const pages = source.page_start === source.page_end ? `p. ${source.page_start}` : `pp. ${source.page_start}–${source.page_end}`;
+    const score = typeof source.score === "number" ? ` · score ${source.score.toFixed(3)}` : "";
+    item.textContent = `${source.filename ?? source.document_id ?? "fonte"} (${pages}${score})`;
+    $("sources").appendChild(item);
+  }
+}
+
+function errorMessage(payload) {
+  const error = payload?.error;
+  if (!error) return null;
+  return `Erro${error.code ? ` (${error.code})` : ""}: ${error.message ?? JSON.stringify(error)}`;
+}
+
+function handleEvent(data, counter) {
+  if (data === "[DONE]") return true;
+  const payload = JSON.parse(data);
+  const error = errorMessage(payload);
+  if (error) { showError(error); return true; }
+  counter.chunks += 1;
+  $("chunks").textContent = counter.chunks;
+  const delta = payload.choices?.[0]?.delta?.content;
+  if (delta) $("answer").textContent += delta;
+  showMetadata(payload);
+  return false;
+}
+
+async function readStream(response) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const counter = { chunks: 0 };
+  let buffer = "";
+  let firstByte = true;
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    if (firstByte) { $("ttfb").textContent = elapsed(); firstByte = false; }
+    const text = decoder.decode(value, { stream: true });
+    $("raw").textContent += text;
+    buffer += text;
+    const events = buffer.split(/\r?\n\r?\n/);
+    buffer = events.pop();
+    for (const event of events) {
+      const data = event.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trimStart()).join("\n");
+      if (data && handleEvent(data, counter)) return;
+    }
+  }
+  if (!$("raw").textContent.includes("[DONE]")) showError("Stream encerrado sem [DONE].");
+}
+
+async function readJson(response) {
+  const text = await response.text();
+  $("ttfb").textContent = elapsed();
+  $("raw").textContent = text;
+  const payload = JSON.parse(text);
+  const error = errorMessage(payload);
+  if (error) { showError(error); return; }
+  $("chunks").textContent = "1";
+  $("answer").textContent = payload.choices?.[0]?.message?.content ?? "";
+  showMetadata(payload);
+}
+
+async function send(event) {
+  event.preventDefault();
+  const streaming = $("stream").checked;
+  resetOutput(streaming);
+  try { localStorage.setItem(URL_STORAGE_KEY, $("url").value); } catch {}
+  controller = new AbortController();
+  $("send").disabled = true;
+  $("stop").disabled = false;
+  startedAt = performance.now();
+  try {
+    const response = await fetch($("url").value, {
+      method: "POST",
+      signal: controller.signal,
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${$("token").value.trim()}` },
+      body: JSON.stringify({ stream: streaming, messages: [{ role: $("role").value, content: $("content").value }] }),
+    });
+    setStatus(response);
+    const isEventStream = (response.headers.get("content-type") ?? "").includes("text/event-stream");
+    await (isEventStream ? readStream(response) : readJson(response));
+  } catch (error) {
+    if (error.name === "AbortError") showError("Requisição cancelada.");
+    else showError(`Falha na requisição: ${error.message}. Verifique a URL, se a API está no ar e o CORS.`);
+  } finally {
+    $("total").textContent = elapsed();
+    $("send").disabled = false;
+    $("stop").disabled = true;
+    controller = null;
+  }
+}
+
+$("form").addEventListener("submit", send);
+$("stop").addEventListener("click", () => controller?.abort());
+</script>
+</body>
+</html>
