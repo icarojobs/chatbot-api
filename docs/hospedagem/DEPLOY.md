@@ -1,75 +1,88 @@
-# Deploy em produção (Cloud Run + Neon)
+# Deploy em produção (Vercel + Neon)
 
-Decisão registrada no [ADR-0005](../ADR/ADR-0005.md). Tempo estimado: ~20 minutos na primeira vez.
+Decisão registrada no [ADR-0010](../ADR/ADR-0010.md), que substitui o Cloud Run do [ADR-0005](../ADR/ADR-0005.md). Na primeira vez, o processo leva uns 20 minutos. Depois disso, cada merge na `main` publica sozinho.
 
 ## 1. Pré-requisitos
 
-- Conta Google Cloud com **faturamento ativo** (o uso fica dentro da franquia gratuita, exceto a instância mínima — ver custos abaixo).
-- [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) instalada e Docker rodando.
-- Conta no [Neon](https://neon.tech) (plano gratuito).
+- Conta na [Vercel](https://vercel.com) (plano Hobby, gratuito, sem cartão), com acesso ao repositório no GitHub.
+- Conta no [Neon](https://neon.tech) (plano gratuito, sem cartão).
+- Node.js (para o `npx vercel`), Docker e `uv` na máquina local.
 
 ## 2. Banco no Neon
 
-1. Crie um projeto (região próxima de `southamerica-east1`, ex.: AWS São Paulo).
-2. Copie a connection string **direta** (sem `-pooler` no host) e troque o prefixo `postgresql://` por `postgresql+psycopg://`, mantendo `?sslmode=require`.
+1. Crie o projeto na região **AWS São Paulo (`aws-sa-east-1`)**. A região não muda depois, e a API roda em São Paulo (`gru1`).
+2. Em **Connect**, desligue **Connection pooling** e copie a connection string. O host não pode ter `-pooler`.
+3. Troque o prefixo `postgresql://` por `postgresql+psycopg://` e mantenha `?sslmode=require`.
 
-A extensão `vector` e as tabelas são criadas automaticamente pelas migrations no start do container.
+A extensão `vector` e as tabelas são criadas pelas migrations, tanto no build da Vercel quanto no `make copy-db-neon`.
 
-## 3. Projeto no Google Cloud
-
-```bash
-gcloud auth login
-gcloud projects create <id-do-projeto>        # ou use um existente
-gcloud billing projects link <id-do-projeto> --billing-account <conta-de-faturamento>
-```
-
-## 4. Configuração
+## 3. Configuração local
 
 ```bash
 cp .env.production.example .env.production   # ignorado pelo git
-openssl rand -hex 32                           # gere API_ACCESS_TOKEN e API_ADMIN_TOKEN novos
+openssl rand -hex 32                           # rode duas vezes: API_ACCESS_TOKEN e API_ADMIN_TOKEN novos
 ```
 
-Preencha `GCP_PROJECT_ID`, `DATABASE_URL` (Neon) e as credenciais do provedor. O limiar de similaridade é escolhido automaticamente para o modelo de embedding (calibração no ADR-0006).
+Preencha `DATABASE_URL` (Neon), as credenciais do provedor e os tokens. **Não reaproveite os tokens de desenvolvimento.**
 
-## 5. Ingestão das apostilas no banco de produção
+## 4. Carga da base no Neon
+
+Escolha **uma** das opções:
 
 ```bash
-make ingest-prod
+make copy-db-neon   # copia a base local chatbot_prod (gerada por make ingest-prod-local), sem gastar créditos
+make ingest-prod    # ou: gera os embeddings de novo, direto no Neon (gasta créditos)
 ```
 
-Gera os embeddings com `cohere/embed-v4.0` (idempotente: pode rodar de novo sem custo extra). Alternativa: enviar os PDFs pela API depois do deploy (manual, seção Documentos).
+O `copy-db-neon` aplica as migrations no Neon, confere se o banco está vazio e copia `documents`, `chunks` e `chunk_embeddings` numa única transação. Ao final, mostra a contagem de registros na origem e no destino.
+
+## 5. Projeto na Vercel
+
+```bash
+npx vercel@64.0.2 login
+npx vercel@64.0.2 link --yes --project chatbot-api   # cria o projeto e o arquivo .vercel/ (ignorado pelo git)
+npx vercel@64.0.2 git connect                        # vincula o repositório do GitHub
+make deploy-env                                      # grava as variáveis de produção (valores não são exibidos)
+```
+
+O `make deploy-env` grava as credenciais como **sensitive**, ou seja, não podem ser lidas depois nem pelo painel. Ele também fixa `API_ENV=production`, `TRUSTED_PROXY_HOPS=1` e `DIRECT_UPLOAD_MAX_BYTES=4194304`.
 
 ## 6. Deploy
 
+O primeiro deploy pode ser feito pela CLI:
+
 ```bash
-make deploy
+npx vercel@64.0.2 deploy --prod
 ```
 
-O script (`scripts/deploy/cloud_run.sh`) é idempotente: habilita as APIs, cria o repositório no Artifact Registry, faz build/push da imagem (tag = commit atual), grava os segredos no Secret Manager, faz o deploy e roda um smoke test em `/health`, `/ready` e `/v1/models`.
+A partir daí, **todo merge na `main` publica automaticamente**. Branches e PRs não geram deploy (`git.deploymentEnabled` no `vercel.json`).
 
-Configuração aplicada no Cloud Run:
+Configuração aplicada (`vercel.json` e `pyproject.toml`):
 
-| Parâmetro | Valor | Motivo |
+| Item | Valor | Motivo |
 |---|---|---|
-| `--min-instances` | 1 | Sem cold start durante a avaliação |
-| `--no-cpu-throttling` | — | Embeddings de uploads rodam em background após a resposta |
-| `--timeout` | 900 s | Respostas em streaming longas |
-| `--concurrency` | 40 | Streams simultâneos por instância |
-| `--max-instances` | 2 | Limita custo e conexões no Neon |
-| `TRUSTED_PROXY_HOPS` | 1 | IP real do cliente para o rate limit (entrada do Google Front End) |
-| Segredos | Secret Manager | `DATABASE_URL`, chave do provedor e tokens nunca ficam na imagem |
+| Entrada | `src/chatbot_api/asgi.py` (`app`) | A Vercel importa `módulo:app`, sem factory |
+| Região | `gru1` (São Paulo) | Mesma região do Neon |
+| `maxDuration` | 300 s | Máximo do plano Hobby; cobre o streaming e o embedding após o upload |
+| Build | `python -m chatbot_api.db.migrate` | Migrations antes de publicar; se falharem, a versão anterior continua no ar |
+| Pacote | sem `tests/`, `docs/`, `evaluation/`, `scripts/` | Pacote menor e cold start mais rápido |
+| Deploy automático | só a `main` | Previews usariam o banco e os créditos de produção |
 
 ## 7. Teste pela URL pública
 
 ```bash
-curl -N https://<url-do-servico>/v1/chat/completions \
+make deploy-smoke URL=https://<projeto>.vercel.app   # /health, /ready e /v1/models
+
+curl -N https://<projeto>.vercel.app/v1/chat/completions \
   -H "Authorization: Bearer $API_ACCESS_TOKEN" -H "Content-Type: application/json" \
   -d '{"stream": true, "messages": [{"role": "user", "content": "O que é matriciamento?"}]}'
 ```
 
+Também dá para testar pelo Postman (`baseUrl`) e pela página `docs/postman/test-stream.html`, conforme o [guia do Postman](../manuais/TESTE_COM_POSTMAN.md).
+
 ## Custos e limites
 
-- `min-instances=1` com CPU sempre alocada **sai da franquia gratuita** (custo baixo, proporcional ao tempo ligado). Para custo zero, use `MIN_INSTANCES=0` no script, aceitando cold start de alguns segundos.
-- O Neon free suspende o banco após inatividade: a primeira consulta depois disso leva ~1 s a mais (o pool reconecta sozinho).
-- Rate limit em memória vale por instância (com `max-instances=2`, o limite efetivo pode dobrar).
+- **Custo zero** dentro dos limites do plano Hobby (uso não comercial) e do Neon free (com cotas mensais de armazenamento e de horas de computação; a base atual ocupa poucos MB).
+- **Requisições de até 4,5 MB:** o upload direto fica limitado a 4 MiB em produção. Para PDFs maiores, use o upload em partes (4 MiB por parte).
+- **Cold start:** sem tráfego, a função escala até zero e o Neon suspende após 5 minutos. A primeira requisição depois disso leva alguns segundos a mais.
+- **Rate limit por instância:** o limite fica em memória, então com várias instâncias o limite efetivo se multiplica.

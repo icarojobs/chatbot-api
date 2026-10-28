@@ -12,7 +12,8 @@ make check       # ruff + mypy strict + pytest com --cov-fail-under=95 (o mesmo 
 make ingest      # ingere docs/apostilas pelo container (sem uv no host)
 make evaluate    # avaliação do retrieval (Hit@k, MRR, abstenção) e limiar sugerido
 make redteam     # 16 ataques de prompt injection no ambiente do container (ADR-0008); falha se algum passar
-make deploy      # Cloud Run (gcloud autenticado + .env.production; ver docs/hospedagem/DEPLOY.md)
+make deploy-env  # grava as variáveis do .env.production na Vercel (deploy é automático a cada merge na main; ver docs/hospedagem/DEPLOY.md)
+make copy-db-neon  # copia a base local chatbot_prod para o Neon vazio (sem reingerir)
 make ingest-prod # ingere docs/apostilas no Neon com o embedding de produção
 make up / down   # docker compose: api, postgres (pgvector) e ollama (+ ollama-models baixa os modelos de dev)
 make up-prod     # API local em API_ENV=production (provedor real, banco chatbot_prod); make up volta ao dev
@@ -57,7 +58,7 @@ API de chatbot com RAG sobre uma base de conhecimento prévia (apostilas de saú
 
 Fluxo planejado (LangGraph `StateGraph`): validar entrada → embedding da pergunta → recuperar top-k chunks (pgvector) → avaliar suficiência → gerar resposta em streaming **ou** abster-se → finalizar metadados. O plano detalhado está em `playground/rag-chatbot-architecture.md` (não rastreado, rascunho local). Fora do escopo inicial: microserviços, filas/Redis, multiagentes, memória/checkpoint persistente, reranking/busca híbrida antes de medir a qualidade. Onde o rascunho diverge da RFC-0002 (SSE próprio, índice local, só CLI), vale a RFC.
 
-Hospedagem: Google Cloud Run + Neon (Postgres com pgvector); Render descartado (filesystem efêmero/suspensão).
+Hospedagem (ADR-0010): Vercel (plano Hobby, runtime Python, região `gru1`) + Neon (`aws-sa-east-1`, conexão direta). Entrada em `src/chatbot_api/asgi.py`; migrations no build (`[tool.vercel.scripts]`); só a `main` publica. Limites: 4,5 MB por requisição (upload direto em produção = 4 MiB), 300 s por invocação. O Cloud Run (ADR-0005) foi abandonado após o bloqueio do faturamento do Google Cloud; o `Dockerfile` segue para o ambiente local.
 
 ### Configuração e ambientes
 

@@ -8,7 +8,7 @@ from sqlalchemy.pool import NullPool
 
 from chatbot_api.db.models import Base
 
-# Serializes concurrent upgrades (e.g. several Cloud Run instances starting at once).
+# Serializes concurrent upgrades (e.g. several instances or deploys starting at once).
 MIGRATION_LOCK_ID = 727_001
 
 
