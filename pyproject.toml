@@ -1,6 +1,6 @@
 [project]
 name = "chatbot-api"
-version = "0.1.0"
+version = "1.0.0"
 description = "API de chatbot com RAG, compatível com a API da OpenAI."
 readme = "README.md"
 license = "MIT"
