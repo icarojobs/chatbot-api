@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help sync install run test lint format typecheck check up up-prod down logs deploy ingest-prod evaluate redteam ingest ingest-prod-local
+.PHONY: help sync install run test lint format typecheck check up up-prod down logs deploy-env deploy-smoke copy-db-neon ingest-prod evaluate redteam ingest ingest-prod-local
 
 MERGED_PR_LIMIT := 200
 
@@ -61,8 +61,14 @@ ingest-prod-local: ## Ingere docs/apostilas no banco chatbot_prod com o embeddin
 
 ENV_PRODUCTION := .env.production
 
-deploy: ## Deploy no Cloud Run (requer gcloud autenticado e .env.production)
-	scripts/deploy/cloud_run.sh $(ENV_PRODUCTION)
+deploy-env: ## Grava as variáveis do .env.production no projeto da Vercel (vercel login + link)
+	scripts/deploy/vercel.sh env $(ENV_PRODUCTION)
+
+deploy-smoke: ## Testa a API publicada: make deploy-smoke URL=https://<projeto>.vercel.app
+	scripts/deploy/vercel.sh smoke "$(URL)" $(ENV_PRODUCTION)
+
+copy-db-neon: ## Copia a base local chatbot_prod (embeddings de produção) para o Neon vazio
+	scripts/deploy/copy_db_to_neon.sh $(ENV_PRODUCTION)
 
 ingest-prod: ## Ingere docs/apostilas no banco de produção com o embedding de produção
 	set -a && . ./$(ENV_PRODUCTION) && set +a && API_ENV=production uv run python -m chatbot_api.ingest docs/apostilas
