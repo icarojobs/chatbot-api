@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from importlib.metadata import version
 
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
@@ -23,7 +24,7 @@ API_DESCRIPTION = (
     "API de chatbot com RAG sobre uma base de conhecimento prévia, "
     "compatível com o formato da API da OpenAI."
 )
-API_VERSION = "0.1.0"
+API_VERSION = version("chatbot-api")
 CORS_ALLOWED_METHODS = ("*",)
 CORS_ALLOWED_HEADERS = ("*",)
 CORS_EXPOSED_HEADERS = ("x-request-id", "retry-after")

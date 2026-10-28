@@ -1,4 +1,5 @@
 from http import HTTPStatus
+from importlib.metadata import version
 
 from fastapi import FastAPI
 from httpx import AsyncClient
@@ -31,3 +32,9 @@ async def test_ready_fails_when_a_check_fails(app: FastAPI, client: AsyncClient)
 
     assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
     assert response.json() == {"status": "not_ready"}
+
+
+async def test_openapi_exposes_the_package_version(client: AsyncClient) -> None:
+    schema = (await client.get("/openapi.json")).json()
+
+    assert schema["info"]["version"] == version("chatbot-api")
