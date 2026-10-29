@@ -97,7 +97,7 @@ Para PDFs de até 30 MB em localhost (4 MiB em produção, por causa do limite d
 3. A resposta é `202` com o documento em `processing`, e `documentId` é preenchida.
 4. **4) Consultar documento** até `status` ser `ready`.
 
-As apostilas de `docs/apostilas` (de 5,6 a 16 MB) cabem no upload direto.
+As apostilas de `docs/apostilas` (de 5,6 a 16 MB) cabem no upload direto em localhost, mas **não em produção**. Lá, use o upload em partes abaixo ou, mais simples, a página `/upload` da API (ex.: https://chatbot-api-flax-rho.vercel.app/upload), que divide o arquivo e envia as partes sozinha.
 
 ### Upload em partes
 

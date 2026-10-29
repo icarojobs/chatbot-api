@@ -151,6 +151,12 @@ No Swagger (`/docs`):
 | 415 | `unsupported_file_type` | O conteúdo não é PDF |
 | 422 | `invalid_document` | PDF sem texto extraível |
 
+### Página de upload: `GET /upload`
+
+A forma mais simples de enviar um PDF grande é abrir **`/upload`** no navegador (em produção: https://chatbot-api-flax-rho.vercel.app/upload). Informe o token admin, escolha um PDF e clique em **Enviar**. A página calcula o SHA-256, divide o arquivo em partes de 4 MiB, envia cada parte (com nova tentativa em falha de rede), conclui o upload e acompanha o documento até `ready`. Ela também lista os documentos da base.
+
+A divisão acontece no navegador porque a hospedagem recusa requisições acima de 4,5 MB antes de elas chegarem à API ([RFC-0005](../RFC/RFC-0005.md)). A página usa exatamente os endpoints abaixo; o token é digitado na página e não é guardado.
+
 ### Upload em partes
 
 O envio é feito **em partes de até 4 MiB** (abaixo do limite de 4,5 MB por requisição de algumas hospedagens), o que permite arquivos grandes e retomada após falha de rede. Tamanho máximo padrão: 50 MB (`UPLOAD_MAX_BYTES`); a sessão expira em 60 minutos (`UPLOAD_TTL_MINUTES`).

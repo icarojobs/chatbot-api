@@ -81,11 +81,13 @@ curl -N https://<projeto>.vercel.app/v1/chat/completions \
   -d '{"stream": true, "messages": [{"role": "user", "content": "O que é matriciamento?"}]}'
 ```
 
-Também dá para testar pelo Postman (`baseUrl`) e pela página `docs/postman/test-stream.html`, conforme o [guia do Postman](../manuais/TESTE_COM_POSTMAN.md).
+Também dá para testar pelo Postman (`baseUrl`) e pela página `docs/postman/test-stream.html`, conforme o [guia do Postman](../manuais/TESTE_COM_POSTMAN.md). Para enviar as apostilas (todas acima de 4 MiB), abra `https://<projeto>.vercel.app/upload`: a página divide o arquivo e faz o upload em partes sozinha.
+
+Use sempre o domínio público do projeto. Os endereços `…-<time>.vercel.app` ficam atrás do login da Vercel e respondem com redirecionamento, o que no navegador aparece como falha de CORS.
 
 ## Custos e limites
 
 - **Custo zero** dentro dos limites do plano Hobby (uso não comercial) e do Neon free (com cotas mensais de armazenamento e de horas de computação; a base atual ocupa poucos MB).
-- **Requisições de até 4,5 MB:** o upload direto fica limitado a 4 MiB em produção. Para PDFs maiores, use o upload em partes (4 MiB por parte).
+- **Requisições de até 4,5 MB:** o upload direto fica limitado a 4 MiB em produção. Para PDFs maiores, use o upload em partes (4 MiB por parte), de preferência pela página `/upload`.
 - **Cold start:** sem tráfego, a função escala até zero e o Neon suspende após 5 minutos. A primeira requisição depois disso leva alguns segundos a mais.
 - **Rate limit por instância:** o limite fica em memória, então com várias instâncias o limite efetivo se multiplica.
