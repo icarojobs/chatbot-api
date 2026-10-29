@@ -169,7 +169,7 @@ Deploy na **Vercel + Neon** (região São Paulo), automático a cada merge na `m
 | `POST` | `/v1/documents?filename=…` | admin | Upload direto de um PDF (corpo binário; até 30 MB local e 4 MiB em produção) |
 | `POST` | `/v1/documents/uploads` (+ `parts`, `complete`) | admin | Upload em partes de PDFs |
 | `DELETE` | `/v1/documents/{id}` | admin | Remove um documento (trechos e embeddings juntos) |
-| `DELETE` | `/v1/documents?confirm=true` | admin | Reset: remove todos os documentos (desabilitado em produção por padrão) |
+| `DELETE` | `/v1/documents?confirm=true` | admin | Reset: remove todos os documentos (desabilitado em produção por padrão; habilitado no deploy da Vercel) |
 | `GET` | `/v1/documents`, `/v1/documents/{id}` | admin | Documentos e status da ingestão |
 
 Com o SDK oficial da OpenAI:

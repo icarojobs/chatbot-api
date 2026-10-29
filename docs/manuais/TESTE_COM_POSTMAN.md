@@ -175,7 +175,7 @@ Enviar um PDF idêntico a um já existente retorna o documento existente (dedupl
 A pasta **6. Exclusão (admin, destrutivo)** apaga dados de verdade:
 
 - **Excluir documento:** remove o documento da variável `documentId` (preenchida pelos uploads) com seus trechos e embeddings, e responde `204`. Para excluir outro, copie o `id` em **Listar documentos** e cole em `documentId`. Depois, uma pergunta sobre o conteúdo dele não deve mais citá-lo em `sources`.
-- **Reset da base:** remove todos os documentos, trechos, embeddings e uploads, e mostra no console quantos foram removidos. Sem `confirm=true` a API responde `400` e nada é apagado (há um teste disso na pasta 5). Em produção o reset responde `403 reset_disabled`, a menos que `DOCUMENTS_RESET_ENABLED=true`. Para recarregar as apostilas depois, rode `make ingest` (dev) ou use o upload direto.
+- **Reset da base:** remove todos os documentos, trechos, embeddings e uploads, e mostra no console quantos foram removidos. Sem `confirm=true` a API responde `400` e nada é apagado (há um teste disso na pasta 5). Em produção o padrão é `403 reset_disabled`, mas o deploy da Vercel define `DOCUMENTS_RESET_ENABLED=true`, então o reset funciona lá. Para recarregar as apostilas depois, rode `make ingest` (dev), `make copy-db-neon` (produção) ou use o upload.
 
 ## 8. Erros esperados
 

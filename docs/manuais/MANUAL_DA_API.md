@@ -243,7 +243,7 @@ curl -X DELETE "http://localhost:8000/v1/documents?confirm=true" -H "Authorizati
 | 400 | `confirmation_required` | Faltou `confirm=true` (nada é apagado) |
 | 403 | `reset_disabled` | Reset desabilitado no ambiente |
 
-Por padrão o reset fica habilitado em `development` e **desabilitado em `production`**. Para mudar, defina `DOCUMENTS_RESET_ENABLED=true` (ou `false`). Depois de um reset, reingira a base com `make ingest` ou com os uploads.
+Por padrão o reset fica habilitado em `development` e desabilitado em `production`. Para mudar, defina `DOCUMENTS_RESET_ENABLED=true` (ou `false`). **No deploy da Vercel ele está habilitado** (`make deploy-env` grava `DOCUMENTS_RESET_ENABLED=true`), para que todos os endpoints possam ser testados. Depois de um reset, reingira a base com `make ingest` (dev), `make copy-db-neon` (produção, sem gastar créditos) ou com os uploads.
 
 
 ## Chat (RAG)

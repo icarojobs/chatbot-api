@@ -11,7 +11,8 @@ readonly SECRET_VARIABLES=(DATABASE_URL OPENAI_BASE_URL OPENAI_ACCESS_KEY API_AC
 readonly CONFIG_VARIABLES=(OPENAI_RESPONSE_MODELS OPENAI_EMBEDDINGS_MODELS)
 # Fixed by the platform: Vercel overwrites X-Forwarded-For with the client IP (1 hop) and caps
 # request bodies at 4.5 MB, so direct uploads stay at 4 MiB (larger files use the chunked upload).
-readonly PLATFORM_VARIABLES=(API_ENV=production LOG_LEVEL=INFO TRUSTED_PROXY_HOPS=1 DIRECT_UPLOAD_MAX_BYTES=4194304)
+# The reset stays enabled so evaluators can exercise every endpoint (make copy-db-neon restores the base).
+readonly PLATFORM_VARIABLES=(API_ENV=production LOG_LEVEL=INFO TRUSTED_PROXY_HOPS=1 DIRECT_UPLOAD_MAX_BYTES=4194304 DOCUMENTS_RESET_ENABLED=true)
 
 log() { printf '\n==> %s\n' "$*"; }
 fail() { printf 'Erro: %s\n' "$*" >&2; exit 1; }
