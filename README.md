@@ -168,6 +168,7 @@ Deploy na **Vercel + Neon** (região São Paulo), automático a cada merge na `m
 | `POST` | `/v1/chat/completions` | acesso | Pergunta/resposta com RAG, `stream` opcional |
 | `POST` | `/v1/documents?filename=…` | admin | Upload direto de um PDF (corpo binário; até 30 MB local e 4 MiB em produção) |
 | `POST` | `/v1/documents/uploads` (+ `parts`, `complete`) | admin | Upload em partes de PDFs |
+| `GET` | `/upload` | nenhum (a página pede o token admin) | Página que divide o PDF em partes e faz o upload sozinha |
 | `DELETE` | `/v1/documents/{id}` | admin | Remove um documento (trechos e embeddings juntos) |
 | `DELETE` | `/v1/documents?confirm=true` | admin | Reset: remove todos os documentos (desabilitado em produção por padrão; habilitado no deploy da Vercel) |
 | `GET` | `/v1/documents`, `/v1/documents/{id}` | admin | Documentos e status da ingestão |
@@ -188,7 +189,7 @@ for chunk in stream:
         print(chunk.choices[0].delta.content, end="", flush=True)
 ```
 
-O último chunk traz os campos extras `sources` (arquivo, páginas e score de cada trecho citado) e `abstained`. Manual completo, com upload e erros: [docs/manuais/MANUAL_DA_API.md](docs/manuais/MANUAL_DA_API.md). Para testar pelo Postman, importe [docs/postman/chatbot-api.postman_collection.json](docs/postman/chatbot-api.postman_collection.json) e siga [docs/manuais/TESTE_COM_POSTMAN.md](docs/manuais/TESTE_COM_POSTMAN.md). Para ver o streaming no navegador, abra [docs/postman/test-stream.html](docs/postman/test-stream.html).
+O último chunk traz os campos extras `sources` (arquivo, páginas e score de cada trecho citado) e `abstained`. Manual completo, com upload e erros: [docs/manuais/MANUAL_DA_API.md](docs/manuais/MANUAL_DA_API.md). Para testar pelo Postman, importe [docs/postman/chatbot-api.postman_collection.json](docs/postman/chatbot-api.postman_collection.json) e siga [docs/manuais/TESTE_COM_POSTMAN.md](docs/manuais/TESTE_COM_POSTMAN.md). Para ver o streaming no navegador, abra [docs/postman/test-stream.html](docs/postman/test-stream.html). Para enviar PDFs sem dividi-los à mão, abra `/upload` na própria API.
 
 ---
 

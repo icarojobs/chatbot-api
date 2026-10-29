@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Upload de documentos — ChatBot API</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1d2330; --muted:#667085; --line:#d9dde3; --accent:#2563eb; --ok:#16a34a; --err:#dc2626; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1218; --card:#181c24; --text:#e6e8ec; --muted:#98a2b3; --line:#2b313c; --accent:#60a5fa; --ok:#4ade80; --err:#f87171; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui, sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:24px 16px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  h2 { font-size:16px; margin:0 0 12px; }
+  p.lead { color:var(--muted); margin:0 0 16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+  label { display:block; font-weight:600; margin:12px 0 4px; }
+  label:first-child { margin-top:0; }
+  input[type=password], input[type=file] { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--text); font:inherit; }
+  .actions { display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; }
+  button { padding:8px 16px; border:0; border-radius:6px; background:var(--accent); color:#fff; font:inherit; font-weight:600; cursor:pointer; }
+  button.secondary { background:transparent; color:var(--text); border:1px solid var(--line); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  progress { width:100%; height:12px; margin:8px 0; accent-color:var(--accent); }
+  #status { font-weight:600; }
+  #status.ok { color:var(--ok); } #status.error { color:var(--err); }
+  ol#steps { margin:8px 0 0; padding-left:20px; color:var(--muted); font-size:13px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); overflow-wrap:anywhere; }
+  th { color:var(--muted); font-weight:600; }
+  .muted { color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Upload de documentos — ChatBot API</h1>
+  <p class="lead">Escolha um PDF: a página calcula o SHA-256, divide o arquivo em partes, envia, conclui o upload e acompanha a ingestão até o documento ficar pronto.</p>
+
+  <form id="form" class="card">
+    <label for="token">Token admin (Bearer)</label>
+    <input id="token" type="password" autocomplete="off" required>
+
+    <label for="file">Arquivo PDF</label>
+    <input id="file" type="file" accept="application/pdf,.pdf" required>
+
+    <div class="actions">
+      <button id="send" type="submit">Enviar</button>
+      <button id="stop" type="button" class="secondary" disabled>Cancelar</button>
+    </div>
+  </form>
+
+  <section class="card">
+    <h2>Progresso</h2>
+    <div id="status">Aguardando um arquivo.</div>
+    <progress id="progress" max="1" value="0"></progress>
+    <ol id="steps"></ol>
+  </section>
+
+  <section class="card">
+    <h2>Documentos na base</h2>
+    <div class="actions"><button id="refresh" type="button" class="secondary">Atualizar lista</button></div>
+    <p id="listInfo" class="muted">Informe o token e clique em Atualizar lista.</p>
+    <table id="documents" hidden>
+      <thead><tr><th>Arquivo</th><th>Status</th><th>Páginas</th><th>Trechos</th><th>ID</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const API = "/v1/documents";
+const POLL_INTERVAL_MS = 2000;
+const POLL_TIMEOUT_MS = 5 * 60 * 1000;
+const PART_ATTEMPTS = 3;
+let controller = null;
+
+class ApiFailure extends Error {}
+
+function headers(extra = {}) {
+  return { Authorization: `Bearer ${$("token").value.trim()}`, ...extra };
+}
+
+async function call(path, options = {}) {
+  const response = await fetch(`${API}${path}`, { signal: controller?.signal, ...options, headers: headers(options.headers) });
+  const text = await response.text();
+  const payload = text ? JSON.parse(text) : null;
+  if (!response.ok) {
+    const error = payload?.error;
+    throw new ApiFailure(`${response.status}${error?.code ? ` ${error.code}` : ""}: ${error?.message ?? response.statusText}`);
+  }
+  return payload;
+}
+
+function setStatus(text, kind = "") {
+  $("status").textContent = text;
+  $("status").className = kind;
+}
+
+function step(text) {
+  const item = document.createElement("li");
+  item.textContent = text;
+  $("steps").appendChild(item);
+}
+
+function setProgress(done, total) {
+  $("progress").max = total;
+  $("progress").value = done;
+}
+
+async function sha256(file) {
+  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function sendPart(upload, file, partNumber) {
+  const start = (partNumber - 1) * upload.part_size;
+  const body = file.slice(start, start + upload.part_size);
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await call(`/uploads/${upload.id}/parts/${partNumber}`, { method: "PUT", body, headers: { "Content-Type": "application/octet-stream" } });
+    } catch (error) {
+      if (error instanceof ApiFailure || error.name === "AbortError" || attempt >= PART_ATTEMPTS) throw error;
+      step(`Parte ${partNumber}: falha de rede, tentando de novo (${attempt + 1}/${PART_ATTEMPTS}).`);
+    }
+  }
+}
+
+async function sendParts(upload, file) {
+  const received = new Set(upload.received_parts);
+  for (let partNumber = 1; partNumber <= upload.total_parts; partNumber++) {
+    if (received.has(partNumber)) continue;
+    setStatus(`Enviando parte ${partNumber} de ${upload.total_parts}…`);
+    await sendPart(upload, file, partNumber);
+    received.add(partNumber);
+    setProgress(received.size, upload.total_parts);
+  }
+  step(`${upload.total_parts} parte(s) de até ${(upload.part_size / 1048576).toFixed(0)} MiB enviadas.`);
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function waitUntilReady(documentId) {
+  const deadline = performance.now() + POLL_TIMEOUT_MS;
+  while (performance.now() < deadline) {
+    const doc = await call(`/${documentId}`);
+    if (doc.status !== "processing") return doc;
+    await sleep(POLL_INTERVAL_MS);
+  }
+  throw new Error("a ingestão não terminou em 5 minutos; consulte o documento depois na lista.");
+}
+
+function finish(doc) {
+  if (doc.status === "ready") {
+    setStatus(`Pronto: ${doc.filename} (${doc.page_count} páginas, ${doc.chunk_count} trechos).`, "ok");
+  } else {
+    setStatus(`Falha na ingestão: ${doc.error ?? doc.status}`, "error");
+  }
+}
+
+async function upload(file) {
+  setStatus("Calculando o SHA-256…");
+  const hash = await sha256(file);
+  step(`SHA-256: ${hash}`);
+  const session = await call("/uploads", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filename: file.name, size: file.size, sha256: hash }),
+  });
+  step(`Upload ${session.id} iniciado: ${file.size.toLocaleString("pt-BR")} bytes em ${session.total_parts} parte(s).`);
+  setProgress(session.received_parts.length, session.total_parts);
+  await sendParts(session, file);
+  setStatus("Concluindo: validando o arquivo e extraindo o texto…");
+  const doc = await call(`/uploads/${session.id}/complete`, { method: "POST" });
+  step(`Documento ${doc.id} criado; gerando os embeddings.`);
+  setStatus("Gerando os embeddings…");
+  finish(await waitUntilReady(doc.id));
+}
+
+async function send(event) {
+  event.preventDefault();
+  const file = $("file").files[0];
+  if (!file) return;
+  $("steps").innerHTML = "";
+  setProgress(0, 1);
+  controller = new AbortController();
+  $("send").disabled = true;
+  $("stop").disabled = false;
+  try {
+    await upload(file);
+  } catch (error) {
+    setStatus(error.name === "AbortError" ? "Upload cancelado." : `Erro: ${error.message}`, "error");
+  } finally {
+    controller = null;
+    $("send").disabled = false;
+    $("stop").disabled = true;
+    refresh();
+  }
+}
+
+async function refresh() {
+  if (!$("token").value.trim()) return;
+  try {
+    const { data } = await call("");
+    const rows = data.map((doc) => {
+      const tr = document.createElement("tr");
+      for (const value of [doc.filename, doc.status, doc.page_count, doc.chunk_count, doc.id]) {
+        const td = document.createElement("td");
+        td.textContent = value;
+        tr.appendChild(td);
+      }
+      return tr;
+    });
+    $("documents").tBodies[0].replaceChildren(...rows);
+    $("documents").hidden = rows.length === 0;
+    $("listInfo").textContent = rows.length ? `${rows.length} documento(s).` : "Nenhum documento na base.";
+  } catch (error) {
+    $("documents").hidden = true;
+    $("listInfo").textContent = `Erro ao listar: ${error.message}`;
+  }
+}
+
+$("form").addEventListener("submit", send);
+$("stop").addEventListener("click", () => controller?.abort());
+$("refresh").addEventListener("click", refresh);
+</script>
+</body>
+</html>
