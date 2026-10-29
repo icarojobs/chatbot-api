@@ -28,12 +28,15 @@ curl -N https://<sua-api>/v1/chat/completions \
 
 ## Funcionalidades
 
-- **Carga de documentos via API** (upload em partes de até 4 MiB, retomável, com verificação de SHA-256) e via CLI — ambas idempotentes.
+- **Carga de documentos via API** (upload direto, upload em partes de até 4 MiB retomável e com verificação de SHA-256, e a página `/upload`, que divide o PDF sozinha) e via CLI, todas idempotentes; exclusão de documentos e reset da base.
 - **Recuperação semântica** dos trechos mais relevantes (pgvector, similaridade de cosseno) com **citação de arquivo e páginas**.
 - **Geração fundamentada**: o modelo responde só com base nos trechos e cita as fontes `[1]`, `[2]`…
 - **Abstenção** quando a base não tem evidência suficiente — sem chamar o LLM.
 - **Streaming SSE** no formato da OpenAI; qualquer SDK/cliente OpenAI funciona trocando `base_url` e `api_key`.
-- **Seleção de modelo** por allowlist (`GET /v1/models`), sem reescrever a integração.
+- **Seleção de modelo** por allowlist (`GET /v1/models`, com `type` `chat` ou `embedding`), sem reescrever a integração.
+- **Instruções do cliente**: mensagens `system`/`developer` ajustam tom, formato e idioma, sem burlar as regras do RAG.
+- **Defesa contra prompt injection** em camadas, medida com um red team automatizado (`make redteam`).
+- **CORS configurável** (padrão: qualquer origem), para chamar a API direto do navegador.
 - **Dois ambientes**: Ollama local em `development`; provedor real apenas em `production`.
 
 ---
@@ -45,8 +48,8 @@ flowchart LR
     Client["Cliente<br/>(SDK OpenAI, curl, Swagger)"] -->|Bearer token| API
 
     subgraph API["FastAPI (Vercel)"]
-        MW["Middlewares ASGI<br/>request-id · rate limit"] --> Routes
-        Routes["/v1/chat/completions<br/>/v1/models<br/>/v1/documents"] --> RAG["RAGService<br/>(LangGraph)"]
+        MW["Middlewares ASGI<br/>CORS · request-id · rate limit"] --> Routes
+        Routes["/v1/chat/completions<br/>/v1/models<br/>/v1/documents<br/>/upload"] --> RAG["RAGService<br/>(LangGraph)"]
         Routes --> Ingestion["IngestionService"]
     end
 
@@ -95,7 +98,7 @@ sequenceDiagram
     API->>DB: vetores + status ready
 ```
 
-Código em `src/chatbot_api/`: `api/` (rotas), `core/` (config, auth, rate limit, erros, logs), `providers/` (adaptador de modelos), `db/` (modelos, migrations), `ingestion/` (PDF → trechos), `uploads/`, `rag/` (retrieval, prompt, grafo) e `evaluation.py`.
+Código em `src/chatbot_api/`: `api/` (rotas e a página `/upload`), `static/` (arquivos da página), `core/` (config, auth, rate limit, erros, logs), `providers/` (adaptador de modelos), `db/` (modelos, migrations), `ingestion/` (PDF → trechos), `uploads/`, `rag/` (retrieval, prompt, defesa contra prompt injection, grafo), `evaluation.py`, `redteam.py` e `asgi.py` (entrada da Vercel).
 
 ---
 
@@ -218,10 +221,13 @@ Todas as variáveis estão documentadas no [`.env.example`](.env.example). As pr
 | `OPENAI_BASE_URL`, `OPENAI_ACCESS_KEY` | Endpoint e chave do provedor de produção (nunca versionados) |
 | `OPENAI_RESPONSE_MODELS` / `OPENAI_EMBEDDINGS_MODELS` | Allowlist de modelos (o primeiro é o padrão) |
 | `RAG_MIN_SCORE` | Override do limiar de similaridade (vazio = valor calibrado por modelo) |
+| `RAG_TOP_K_DEFAULT` / `RAG_TOP_K_MAX` | Trechos recuperados por pergunta (padrão 6, máximo 8; o cliente pode enviar `top_k`) |
+| `DIRECT_UPLOAD_MAX_BYTES` | Limite do upload direto (padrão 30 MB; 4 MiB na Vercel) |
+| `DOCUMENTS_RESET_ENABLED` | Libera o reset da base (vazio = só em `development`; `true` no deploy da Vercel) |
 | `RATE_LIMIT_DEFAULT`, `TRUSTED_PROXY_HOPS` | Rate limit por IP e proxies confiáveis |
 | `CORS_ALLOWED_ORIGINS` | Origens liberadas no CORS, separadas por vírgula (padrão `*`, qualquer origem) |
 
-Segredos ficam apenas no `.env` (local) ou no Secret Manager (produção).
+Segredos ficam apenas no `.env` (local) ou nas variáveis de ambiente da Vercel, gravadas como *sensitive* pelo `make deploy-env` (produção).
 
 ---
 
@@ -234,7 +240,7 @@ make evaluate  # avaliação do retrieval
 make redteam   # 16 ataques de prompt injection contra os modelos do ambiente (make up / make up-prod)
 ```
 
-- **206 testes, 100% de cobertura**, com warnings tratados como erro. Testes de integração usam PostgreSQL real; nenhum teste chama provedores reais.
+- **223 testes, 100% de cobertura**, com warnings tratados como erro. Testes de integração usam PostgreSQL real; nenhum teste chama provedores reais.
 - O endpoint de chat é testado com o **SDK oficial da OpenAI** contra a API.
 - **CI** (`ci.yml`): lint, tipos e testes com Postgres em todo PR.
 - **Security** (`security.yml`): CodeQL, Semgrep, pip-audit, Gitleaks e Trivy bloqueiam o merge em achados HIGH/CRITICAL ([RFC-0001](docs/RFC/RFC-0001.md)).
@@ -248,7 +254,7 @@ make redteam   # 16 ataques de prompt injection contra os modelos do ambiente (m
 
   | Ambiente | Antes | Depois |
   |---|---|---|
-  | dev (`qwen3:4b`) | 8/13 | 15/16 |
+  | dev (`qwen3:4b`) | 8/13 | 14–15/16 (varia entre execuções) |
   | prod (`gpt-5-mini`) | — | 16/16 |
 - Controles da aplicação: tokens comparados em tempo constante, rate limit em todas as rotas (IP real atrás do proxy), allowlist de modelos, erros sem detalhes internos, contexto tratado como dado não confiável no prompt, uploads validados por SHA-256 e magic bytes, container sem root e segredos fora do repositório.
 
@@ -258,13 +264,15 @@ make redteam   # 16 ataques de prompt injection contra os modelos do ambiente (m
 
 Conjunto versionado em [`evaluation/questions.json`](evaluation/questions.json): 20 perguntas sobre as apostilas e 10 fora do escopo ([ADR-0006](docs/ADR/ADR-0006.md)).
 
-| Métrica (top-4) | Desenvolvimento (`bge-m3`) | Produção (`cohere/embed-v4.0`) |
-|---|---|---|
-| Hit@4 (recall) | 85% | **90%** |
-| MRR | 0,767 | **0,817** |
-| Perguntas no escopo respondidas | 95% | 95% |
-| Abstenção correta fora do escopo | 100% | 100% |
-| Latência do retrieval | 3,6 ms | 3,5 ms |
+| Métrica | Dev (`bge-m3`), top-6 (padrão atual) | Dev (`bge-m3`), top-4 | Produção (`cohere/embed-v4.0`), top-4 |
+|---|---|---|---|
+| Hit@k (recall) | 90% | 85% | **90%** |
+| MRR | 0,777 | 0,767 | **0,817** |
+| Perguntas no escopo respondidas | 95% | 95% | 95% |
+| Abstenção correta fora do escopo | 100% | 100% | 100% |
+| Latência do retrieval | 3,3 ms | 3,6 ms | 3,5 ms |
+
+O `top_k` padrão passou de 4 para 6. Em dev, as duas medições são de 29/10/2026. Produção ainda não foi medida com top-6, porque `make evaluate` com o perfil de produção gasta créditos. As linhas de respondidas e de abstenção não dependem do `top_k`: elas usam o score do melhor trecho.
 
 Ponta a ponta em produção (`gpt-5-mini`): respostas com citações corretas em 5–10 s até o primeiro token (modelo de raciocínio); perguntas fora do escopo abstêm em < 1 s.
 
@@ -284,6 +292,7 @@ Ponta a ponta em produção (`gpt-5-mini`): respostas com citações corretas em
 | Defesa em camadas contra prompt injection + red team | O prompt sozinho bloqueava 8/13 ataques no modelo de dev; com as camadas determinísticas, 14–15/16 (dev, varia entre execuções) e 16/16 (prod) | [ADR-0008](docs/ADR/ADR-0008.md) |
 | CORS liberado para qualquer origem (configurável) | Front-ends e páginas de teste chamam a API direto do navegador; sem cookies, o Bearer no header mantém o `*` seguro | [ADR-0009](docs/ADR/ADR-0009.md) |
 | Upload em partes de 4 MiB no Postgres | Funciona em qualquer hospedagem, retomável e multi-instância | [Fase 4](docs/planejamento/PLANO_DE_DESENVOLVIMENTO.md) |
+| Página `/upload` que divide o PDF no navegador | A Vercel recusa requisições acima de 4,5 MB antes de chegarem à API; a divisão precisa acontecer em quem envia | [RFC-0005](docs/RFC/RFC-0005.md) |
 | Rate limit e logs em middlewares ASGI próprios | A slowapi não aplicava o limite e quebraria o streaming SSE | [ADR-0001](docs/ADR/ADR-0001.md) |
 | Vercel + Neon (São Paulo) | Grátis sem cartão, SSE nativo, deploy contínuo só na `main`; substituiu o Cloud Run após o bloqueio do faturamento do Google Cloud | [ADR-0010](docs/ADR/ADR-0010.md) |
 
@@ -296,8 +305,9 @@ O desenvolvimento seguiu o [plano por fases](docs/planejamento/PLANO_DE_DESENVOL
 - **Histórico de conversa** não é usado na busca (apenas a última pergunta).
 - **Prompt injection**: o filtro é baseado em padrões e o modelo de dev (4B) ainda obedece a ordens disfarçadas. Em produção, os 16 ataques foram bloqueados, mas nenhuma defesa é absoluta. Rode `make redteam` a cada troca de modelo ou de prompt.
 - **Recall de 90%**: termos raros com uma única ocorrência (ex.: "redução de danos") podem ficar fora do top-k → busca híbrida (BM25 + RRF) se a base crescer.
-- **Rate limit por instância** (memória); Redis se houver várias instâncias sob carga.
-- **Ingestão em background no processo**: um restart durante os embeddings exige reenviar o documento (a ingestão retoma de onde parou).
+- **Rate limit por instância** (memória): na Vercel, cada instância tem o próprio contador, então o limite efetivo cresce com a escala; Redis se houver carga real.
+- **Embeddings em background na mesma invocação** (`BackgroundTasks`, até os 300 s da função na Vercel): se a invocação cair no meio, reenviar o documento retoma de onde parou. Bases muito maiores pediriam uma fila.
+- **Cold start**: na Vercel e no Neon (suspenso após 5 min), a primeira requisição depois de um tempo parado é mais lenta.
 - **PDFs digitalizados** (sem texto) não são suportados (sem OCR).
 - **`usage`** (contagem de tokens) não é retornado nas respostas.
 - **Avaliação** pequena (30 perguntas, relevância por termos): adequada para regressão e calibração, não como benchmark absoluto.
