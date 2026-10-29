@@ -5,7 +5,7 @@ from importlib.metadata import version
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
-from chatbot_api.api.routes import chat, documents, health, models
+from chatbot_api.api.routes import chat, documents, health, models, pages
 from chatbot_api.core.config import Settings, get_settings
 from chatbot_api.core.errors import register_error_handlers
 from chatbot_api.core.logging import RequestContextMiddleware, configure_logging
@@ -22,7 +22,8 @@ from chatbot_api.rag.factory import build_rag_service
 API_TITLE = "ChatBot API"
 API_DESCRIPTION = (
     "API de chatbot com RAG sobre uma base de conhecimento prévia, "
-    "compatível com o formato da API da OpenAI."
+    "compatível com o formato da API da OpenAI. "
+    "Para enviar um PDF sem dividi-lo manualmente, use a página [/upload](/upload)."
 )
 API_VERSION = version("chatbot-api")
 CORS_ALLOWED_METHODS = ("*",)
@@ -78,4 +79,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(models.router)
     app.include_router(documents.router)
     app.include_router(chat.router)
+    app.include_router(pages.router)
     return app
