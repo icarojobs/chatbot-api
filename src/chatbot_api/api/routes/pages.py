@@ -2,11 +2,12 @@ import base64
 import hashlib
 import re
 from functools import cache
-from importlib.resources import files
+from pathlib import Path
 
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 
+STATIC_DIR = Path(__file__).resolve().parents[2] / "static"
 UPLOAD_PAGE = "upload.html"
 INLINE_BLOCK = r"<{tag}>(.*?)</{tag}>"
 CONTENT_SECURITY_POLICY = (
@@ -28,7 +29,7 @@ def inline_hash(html: str, tag: str) -> str:
 
 @cache
 def load_page(name: str) -> tuple[str, dict[str, str]]:
-    html = (files("chatbot_api") / "static" / name).read_text(encoding="utf-8")
+    html = (STATIC_DIR / name).read_text(encoding="utf-8")
     policy = CONTENT_SECURITY_POLICY.format(
         script=inline_hash(html, "script"), style=inline_hash(html, "style")
     )
