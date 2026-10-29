@@ -48,7 +48,7 @@ npx vercel@64.0.2 git connect                        # vincula o repositório do
 make deploy-env                                      # grava as variáveis de produção (valores não são exibidos)
 ```
 
-O `make deploy-env` grava as credenciais como **sensitive**, ou seja, não podem ser lidas depois nem pelo painel. Ele também fixa `API_ENV=production`, `TRUSTED_PROXY_HOPS=1` e `DIRECT_UPLOAD_MAX_BYTES=4194304`.
+O `make deploy-env` grava as credenciais como **sensitive**, ou seja, não podem ser lidas depois nem pelo painel. Ele também fixa `API_ENV=production`, `TRUSTED_PROXY_HOPS=1`, `DIRECT_UPLOAD_MAX_BYTES=4194304` e `DOCUMENTS_RESET_ENABLED=true`. O reset fica habilitado para que todos os endpoints possam ser testados; depois de um reset, `make copy-db-neon` restaura a base sem gastar créditos (a cópia exige o banco vazio).
 
 ## 6. Deploy
 
