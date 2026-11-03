@@ -17,7 +17,7 @@ dependencies = [
     "pgvector==0.5.1",
     "alembic==1.20.0",
     "pypdf==6.21.3",
-    "langgraph==1.2.16",
+    "langgraph==1.2.18",
 ]
 
 [dependency-groups]
