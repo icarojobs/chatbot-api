@@ -76,7 +76,7 @@ jobs:
           --config p/default --config p/python --config p/owasp-top-ten
           --sarif --output semgrep.sarif
 
-      - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+      - uses: github/codeql-action/upload-sarif@1fc58d04a4d4374f921bdac573c3811c240f9c26 # v4.39.2
         if: env.CAN_UPLOAD_SARIF == 'true'
         with:
           sarif_file: semgrep.sarif
@@ -127,7 +127,7 @@ jobs:
           .github/scripts/docker_scan.sh "$GITLEAKS_IMAGE" git /src --redact --no-banner
           --report-format sarif --report-path /src/gitleaks.sarif
 
-      - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+      - uses: github/codeql-action/upload-sarif@1fc58d04a4d4374f921bdac573c3811c240f9c26 # v4.39.2
         if: always() && env.CAN_UPLOAD_SARIF == 'true' && hashFiles('gitleaks.sarif') != ''
         with:
           sarif_file: gitleaks.sarif
@@ -150,7 +150,7 @@ jobs:
           .github/scripts/docker_scan.sh "$TRIVY_IMAGE" fs --cache-dir /tmp/trivy-cache
           --scanners vuln,misconfig --format sarif --output trivy.sarif .
 
-      - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+      - uses: github/codeql-action/upload-sarif@1fc58d04a4d4374f921bdac573c3811c240f9c26 # v4.39.2
         if: env.CAN_UPLOAD_SARIF == 'true'
         with:
           sarif_file: trivy.sarif
